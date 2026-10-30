@@ -4,7 +4,7 @@ The software is ready for a first physical-board bring-up. All evidence below us
 
 ## Automated checks
 
-`python -m pytest -q`: **23 passed** in 20.44 seconds after the saved-take prediction extension. One upstream Starlette/AnyIO deprecation warning remains.
+`python -m pytest -q`: **23 passed** in 19.85 seconds after the saved-take prediction and serial-shutdown fixes. One upstream Starlette/AnyIO deprecation warning remains.
 
 Coverage includes fragmented UART decoding and malformed packets, signed complex IQ, the host-compiled C ROI encoder, RF/profile bounds, actual pyserial reads and writes through macOS pseudoterminals, trial storage/review/media, whole-session training and provenance checks, local-origin restrictions, DCA commands and reordered/lost UDP data, and synthetic ADC reconstruction.
 
@@ -40,6 +40,8 @@ Added prediction for saved takes of either source and a last-completed-DCA short
 Browser QA used a local model fitted to repeated emulated ADC fixtures, with intentionally uninformative labels. Clicking Predict saved take produced the expected DCA result, marked TRAINING TAKE / playback check and rejected at score 0.50. That is pipeline evidence only. See [dca-prediction-preview.jpg](dca-prediction-preview.jpg). QA recordings/models stay under ignored test-data and are not published.
 
 The four CAD print meshes pass watertightness, consistent-winding and single-connected-surface checks. The existing 25-file CAD checksum manifest was checked before publication preparation. Public source excludes vendor archives/PDFs, vendor-document screenshots, local viewer logs, recordings and trained models. The public README credits Subvocal and distinguishes the standalone USB enclosure from the exposed DCA/carrier bench arrangement.
+
+Initial hosted macOS CI exposed a serial shutdown deadlock under output backpressure. The binary reader now remains active until the sensorStop command completes, and CLI delivery relies on bounded writes plus acknowledgement rather than unbounded tcdrain/flush. The serial emulator regression sends sustained output and verifies timely, acknowledged shutdown. CI emits verbose test progress and stack dumps for stalled tests.
 
 ## Physical checks still required
 

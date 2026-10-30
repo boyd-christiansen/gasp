@@ -25,7 +25,7 @@ def test_real_serial_io_with_emulated_ti_device():
                     if line=='sensorStop':started.clear()
             if started.is_set() and time.monotonic()>=deadline:
                 z=np.ones((64,12),dtype=np.complex64)*(123+456j)
-                wire=encode_frame(number,z);os.write(dm,wire[:23]);os.write(dm,wire[23:]);number+=1;deadline=time.monotonic()+.05
+                wire=encode_frame(number,z);os.write(dm,wire[:23]);os.write(dm,wire[23:]);number+=1;deadline=time.monotonic()+.005
     worker=threading.Thread(target=device,daemon=True);worker.start()
     frames=[];errors=[];source=None
     try:
@@ -40,6 +40,10 @@ def test_real_serial_io_with_emulated_ti_device():
         np.testing.assert_array_equal(frames[0].complex_heatmap(64),123+456j)
         assert commands[-1]=='sensorStart' and 'guiMonitor -1 0 1 0 1 0 1' in commands
     finally:
+        before_close=time.monotonic()
         if source:source.close()
+        close_seconds=time.monotonic()-before_close
         stop.set();worker.join(1)
         for fd in (cm,cs,dm,ds):os.close(fd)
+    assert close_seconds<3, 'Serial shutdown stalled under output backpressure'
+    assert commands[-1]=='sensorStop', 'The emulator must handle stop while its data output is drained'

@@ -22,7 +22,8 @@ class RadarCLI:
     def command(self, line: str):
         self.serial.reset_input_buffer()
         self.serial.write((line + "\n").encode("ascii"))
-        self.serial.flush()
+        # write_timeout bounds enqueueing; the Done reply confirms delivery.
+        # tcdrain/flush can block forever on a backpressured macOS serial/PTY.
         deadline, response = time.monotonic() + self.timeout, bytearray()
         while time.monotonic() < deadline:
             response.extend(self.serial.read(4096))
@@ -88,13 +89,15 @@ class SerialSource:
                 self.on_error(str(exc))
 
     def close(self):
-        self.stop.set()
-        if self.thread and self.thread is not threading.current_thread():
-            self.thread.join(2)
         try:
+            # Keep draining binary output while the board handles sensorStop.
+            # Stopping the reader first can backpressure the device's CLI task.
             self.cli.command("sensorStop")
         except Exception:
             pass
+        self.stop.set()
+        if self.thread and self.thread is not threading.current_thread():
+            self.thread.join(2)
         self.data.close()
         self.cli.close()
 
