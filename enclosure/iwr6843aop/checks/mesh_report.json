@@ -1,0 +1,50 @@
+{
+  "front_open_aperture.stl": {
+    "triangles": 3118,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 14662.28605680695,
+    "bounds_mm": [
+      52.0,
+      174.0,
+      11.44364
+    ]
+  },
+  "front_radome.stl": {
+    "triangles": 2978,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 17606.539215970704,
+    "bounds_mm": [
+      52.0,
+      174.0,
+      11.44364
+    ]
+  },
+  "nut_retainer.stl": {
+    "triangles": 356,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 643.8038768412844,
+    "bounds_mm": [
+      25.4,
+      9.0,
+      4.643749999999999
+    ]
+  },
+  "rear_shell.stl": {
+    "triangles": 5830,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 45183.25409626641,
+    "bounds_mm": [
+      52.0,
+      175.88909,
+      32.3
+    ]
+  }
+}

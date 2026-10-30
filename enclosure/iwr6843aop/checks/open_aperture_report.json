@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "valid_closed_solid": true,
+  "window_mm": [
+    42.0000002,
+    44.000000199999995
+  ],
+  "window_centre_xy_mm": [
+    0.1947239999999999,
+    -20.112511
+  ],
+  "material_in_direct_package_projection_mm3": 0.0,
+  "clear_geometric_half_angle_deg": 50,
+  "all_four_fastener_bosses_unchanged": true,
+  "front_volume_mm3": 14732.327458673972,
+  "interferences_mm3": {
+    "rear_shell": 0.0,
+    "nut_retainer": 0.0,
+    "pcb_PROC091G": 0.0,
+    "ref_U2": 0.0,
+    "ref_J2": 0.0,
+    "ref_J11": 0.0,
+    "ref_S2": 0.0,
+    "ref_S1": 0.0,
+    "ref_J5": 0.0,
+    "ref_J1": 0.0,
+    "ref_J7": 0.0,
+    "ref_J6": 0.0,
+    "ref_J10": 0.0,
+    "ref_J3": 0.0,
+    "ref_J8": 0.0,
+    "ref_S3": 0.0,
+    "ref_SW2": 0.0,
+    "ref_SW3": 0.0,
+    "ref_heatsink_envelope": 0.0,
+    "hardware_1_4_20_nut_threads_schematic": 0.0,
+    "ref_straight_USB_boot_11x20x6_cable_4p4": 0.0
+  },
+  "note": "Geometric checks only; RF performance and physical printing remain untested."
+}
