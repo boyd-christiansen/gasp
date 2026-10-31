@@ -3,8 +3,8 @@
 **Desktop radar experiments for personal silent-speech training.**
 
 <p>
-  <img src="enclosure/capture_stack/renders/assembled_20.png" alt="Full capture-stack enclosure with ripple cover and adjustable tabletop stand" width="300">
-  <img src="enclosure/iwr6843aop/renders/desktop_dock_assembled.png" alt="Single-board radar enclosure in the new drop-in desktop dock" width="300">
+  <img src="enclosure/capture_stack/renders/assembled_20.png" alt="Full capture-stack enclosure with ripple cover and adjustable tabletop stand" height="280">
+  <img src="enclosure/iwr6843aop/renders/desktop_dock_assembled.png" alt="Single-board radar enclosure in the new drop-in desktop dock" height="280">
 </p>
 
 Two desktop prototypes: the **full capture stack** for IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM, and the **single-board enclosure with its new desktop dock**. [Explore the hardware and print files →](docs/ENCLOSURES.md)
