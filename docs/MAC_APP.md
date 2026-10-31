@@ -1,58 +1,81 @@
 # Gasp · Mac app
 
-This release collects and reviews personal radar training data. It is an installed macOS application with a menu bar, a small non-activating recording overlay, and a bundled local capture engine. It needs no Terminal window, cloud account, Python installation, API key, or transcription model to run.
+Gasp collects and reviews personal radar training data. The installed Mac app bundles its capture engine and stores recordings locally. Radar dictation and text insertion remain disabled.
 
-**Transcription, text insertion, and radar predictions are disabled.** The separate source workbench can explicitly enable experimental classifier evaluation with `serve --research`; the installed app never enables it.
+## Capture
 
-## Start collecting
+**Radar data** has two tabs: **Capture** and **Training**. Capture's collapsible left library contains saved takes. **Settings** is at the bottom left and contains hardware, optional reference audio, and the recording shortcut. Dictation has a separate empty history until a decoder is available.
 
-1. Open **Gasp** in your user Applications folder (`~/Applications/Gasp.app`).
-2. In **Radar data → Setup**, connect the **Simulator** to practice. Its waveforms and all derived results are clearly marked synthetic and cannot establish speech-recognition accuracy.
-3. Create a **Personal calibration** visit with your participant name, distance, posture and room notes. Choose paired voiced/silent collection or a single mode. Movement and rest checks have their own labels.
-4. Optionally enable reference audio. macOS asks for microphone access at that point. Audio is saved locally with each take; it is never transcribed.
-5. Record a take with the on-screen button. In **Dictation → Settings** in the installed app, enable the recording shortcut and grant macOS **Input Monitoring** to use a double tap of Right Option. Right Control and Fn/Globe are alternatives; OS shortcuts can conflict with them. Press the same key once to finish or Escape to cancel. Modifier-plus-typing does not count as a tap. Input Monitoring is optional; buttons and menu controls work without it. The listener observes events without blocking their normal delivery.
-6. **Wait for the readiness sound and Recording indicator before performing the prompt.** DCA first arms and waits for data. There is no claim of zero-latency start. Takes end automatically at their short duration limit or can be finished early after half a second.
-7. Open the saved take in **Review takes**. Listen to reference audio if present, inspect the trace and loss figures, and confirm what you actually said or silently mouthed. Use **Use prompt** only if you followed the prompt. Keep fillers and repetitions; do not polish the transcript. Reject uncertain or corrupted takes.
-8. **Verify & keep** makes the take eligible for training and advances the script. Rejected takes stay in the archive and leave the script step available for a retake. A cancelled USB recording adds no trial. Cancelled DCA recordings retain partial raw diagnostics but add no training trial. Once DCA decoding has started, wait and reject the resulting take instead.
+1. Open `~/Applications/Gasp.app`. In **Settings**, connect the Simulator to practice, or select the physical USB/DCA source and its ports/profile. Simulator data is explicitly marked and cannot establish speech accuracy.
+2. Choose **New capture**. Select a built-in calibration/phrase script, enter your own words and short phrases (one per line), or choose **Reader** and paste/import a text document.
+3. Save the capture conditions: person, distance, location, enclosure, mount, yaw/pitch/roll and placement notes. A recording block retains the exact radar configuration, source, ordered script, script hash and available firmware information. Start another block after changing setup or on another acquisition day.
+4. Optionally enable **Record microphone with each take** in Settings. macOS requests microphone access. Audio is a reference for annotation; it is never an input to the radar model.
+5. For words/phrases, **hold Space or the record button**, wait for Recording/the readiness sound, perform the prompt, then release. For Reader, click **Start passage**, read naturally, then **Finish passage**. Cancel or Escape discards the training take. A minimum radar window is retained for a usable sample; releasing before readiness cancels.
+6. Saved takes advance the script and remain **pending review**. Click a take in the library to inspect it. Confirm the actual words, preserve fillers/repetitions, and choose **Verify & keep**. Reject uncertain or corrupted takes. A rejected prompt becomes available for another attempt.
 
-Visits and script order survive app restarts. Select a visit in the sidebar to load it, connect its matching source/profile, and resume. Restarts do not automatically open hardware or begin recording. No always-on microphone or radar recording is enabled.
+The optional global shortcut uses a double tap of Right Option (Right Control or Fn/Globe are alternatives) to begin and one tap to finish. Enable it in Settings and grant Input Monitoring if desired. Buttons and Space work without that permission. Modifier-plus-typing does not count as a tap.
 
-## Workspaces
+## Reader: longer text and books
 
-**Radar data** contains **Capture**, **Recordings**, **Training**, and **Setup**. Visits stay in its sidebar. Source configuration, reference audio, and new-visit settings are under Setup. The interface and native recording overlay use a monochrome palette.
+Reader preserves document order and divides text into resumable passages of at most 120 words. Each completed passage is saved separately. USB takes have a three-minute ceiling; DCA passages are shortened to fit its 25-second raw-capture limit. Finish before the limit, pause while saving, and start the next passage. This release does not record a whole book as one uninterrupted stream.
 
-**Dictation** contains **History** and **Settings**. History is an empty shell until a dictation engine is implemented; radar takes and reviewed training labels are not presented as dictation results. The shortcut setting is shared with radar capture. Selecting Dictation does not enable speech recognition or start radar collection through the recording shortcut. An already-running radar take can still be finished.
+Choose paced highlighting at 50–300 words/minute, manual scrolling, or **Follow voice · on device**. Voice following requires the installed app, reference audio, macOS speech permission, and an available local language model. It follows approximate recognized progress through the displayed script; it does not confirm the transcript or create word boundaries. Silent reading uses paced/manual mode. Speech assistance has no network fallback. If recognition stops, finish manually and choose another scroll mode for the next take.
 
-## Collection plan
+Use **Continue a saved script** under New capture, or **Continue script** while reviewing a take, after connecting the same source/profile. Pending captured passages count as completed; rejected passages can be retaken. Progress survives restarts. Imports are plain text, limited to 200,000 characters per block; import another chapter/block for larger books.
 
-The versioned decks are **Personal calibration**, **First phrase experiment**, and **Natural sentences**. Calibration checks stillness, jaw/lip movement, varied syllables and vowels, short sentences, head turns and swallowing. It stores a personal reference and training material; it does **not** automatically fit a speech decoder, calibrate a beamformer, or prove phonetic separability. The starter sentences are not a validated phonetically balanced corpus.
+## Review: one player for radar, audio and text
 
-Paired mode records each speech prompt aloud, then silently. The two takes share a pair ID but have independent timing. Negative/rest prompts are recorded once per repetition, with their actual movement mode. Each visit stores its full ordered plan and shuffle seed. A future sequence dataset will need much more varied text and additional visits.
+The playhead drives the radar visualization, audio waveform and word track together. Click a word to jump to it. Select a word and drag either edge, or use these shortcuts when focus is outside a text field:
 
-Create separate **training**, **reserved validation**, and **reserved final test** visits. A new day or sensor repositioning is a useful visit boundary. Calibration visits are not held-out evaluation data. Reserved validation/test visits cannot be fitted by the baseline trainer. Do not repeatedly tune against the final test visit.
+| Control | Action |
+|---|---|
+| Space | Play/pause |
+| Left / Right | Step one original radar sample |
+| Shift + Left / Right | Move 0.1 seconds |
+| `[` / `]` | Set selected word's start/end at the playhead |
+| Command-Z | Undo a word edit in the current review |
+| + / − | Zoom the timeline |
 
-The **Train baseline** screen trains the existing CPU phrase classifier on approved recordings with a whole-visit holdout. Use at least two matching examples of every label on each side. Choose one speech mode; voiced and silent takes are not pooled. Rest/movement negatives may be included. Calibration references are not offered as phrase-classification visits. Models stay restricted to the same participant, source, profile and antenna layout. Reports show counts, accuracy, macro F1, majority baseline, source and synthetic provenance. This is a closed-vocabulary experiment, not open dictation.
+**Use script** copies intended text only. It creates untimed words; their timing is not evenly guessed. Place their boundaries manually or use an alignment source. Unplaced words remain selectable below the track. Whole-passage verified text is valid supervision even without word timing.
 
-## Radar sources and timing
+**Suggest word timing · on device** runs optional local speech recognition on saved reference audio. Long audio is processed in 45-second chunks, retaining offsets in original audio time. These are ASR estimates, not forced alignment against a corrected transcript. They remain pending until reviewed. If recognized words differ from existing reviewed text, the app preserves your text and asks you to reconcile them. Raw ASR text is retained separately.
 
-- **USB:** compatible SDK 3.x OOB AOP firmware and both selected serial ports. Collection includes up to 350 ms of available pre-roll and 250 ms after finishing. USB data is a processed complex heatmap, not raw ADC.
-- **DCA:** IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM, radar command USB, and Ethernet. The app uses the existing native UDP capture and two-lane decoder. Takes remain bounded to 25 seconds. Raw capture includes arming and stop/drain margins; it is not a continuous dictation stream. See [hardware setup](HARDWARE.md).
-- **Native audio:** AVAudioEngine records a WAV reference. Metadata includes first audio sample host time, sample position/rate, channel count, frame count and detected sample-position discontinuities. Audio starts before radar arming and stops when capture ends, before importing the radar sample.
-- **Alignment:** cue-display events include a software clock estimate and round-trip uncertainty. Audio uses the Mac host clock; USB has packet-arrival timing and DCA has a command-anchored ADC schedule. Device/transport delays remain unmeasured. This is not hardware synchronization or word-level ground truth. Validate offsets on hardware before using fine temporal labels.
+For an external forced aligner, import JSON with `timebase: "audio"` or `"radar"` and a `words` array of `{ "text": "hello", "start": 1.2, "end": 1.6 }`. Montreal Forced Aligner's JSON `tiers.words.entries` format is also accepted. The aligner itself is not bundled. Imported word text must match existing reviewed text. Intervals must be ordered, non-overlapping and inside the radar take. Silent takes have intended/manual labels, not audio-established articulation boundaries.
 
-Whole-utterance confirmed text is the initial supervision. Optional reviewed start/end boundaries are seconds from the first saved radar sample and affect baseline feature extraction without altering raw artifacts. No automatic speech boundaries, phoneme labels or ASR word timestamps are fabricated.
+**Timing & notes** contains utterance trim points and an adjustable audio start offset in radar time. Initial synchronization is a host-clock estimate; USB arrival latency and DCA command-to-frame offset remain unmeasured. Fine editing does not increase the sensor's temporal resolution. Edits invalidate prior approval, preserve raw signals and archive earlier annotations. Stale saves from another view are rejected.
 
-## Local files and schema
+## Radar views and profiles
 
-Installed-app data is under `~/Library/Application Support/Gasp/Recordings`. The menu item **Show local recordings** opens it. Logs are in the neighboring `Logs` folder. The source workbench's existing `data/` directory remains separate; data is not copied or uploaded automatically. Source files and recordings are independent of the installed app, so rebuilding it preserves visits.
+| View | Meaning / requirements |
+|---|---|
+| Range over time | Mean magnitude over channels, with original sample times retained for edits |
+| Phase over time | Unwrapped phase at the selected range bin/channel; gaps remain visible |
+| I/Q trajectory | Real and imaginary signal components, with **time as the third axis**; this is not physical XYZ motion |
+| Range · selected frame | Magnitude across distance at the playhead |
+| Range–Doppler | Full saved distance/velocity matrix; requires the Doppler USB profile or complete DCA bursts |
+| 3D / range–azimuth detections | Firmware Cartesian detections; requires spatial USB output and actual detections |
 
-Schema 2 adds an immutable original prompt and target, confirmed verbatim text, review status/provenance, articulation, plan step/pair IDs, calibration reference, placement, dataset role, capture events and optional trim boundaries. ASR and output-text fields remain null. New takes are pending and excluded until human approval. Editing text or trim points without re-approving invalidates approval. Legacy schema 1 records still load and retain their historical acceptance; new review gates cannot retroactively establish their labels.
+**Phase · 10 fps** is the USB starting point; 20 fps is available. **Phase + range–Doppler · 10 fps** retains the full 64×16 Doppler matrix alongside all 12 complex channels. **Spatial diagnostics + Doppler · 2 fps** adds firmware detections at a lower rate to allow for variable UART traffic. The conservative budget includes a reserve for up to 1,024 points; actual sustained load still needs checking. Both extra profiles have streamed on the connected Rev G / SDK 03.06.02.00 board. The diagnostic scene produced zero points, so spatial calibration/accuracy is unverified.
 
-The installed engine binds only to loopback on an available port and requires a fresh per-launch token. The native bridge accepts only the app's main local page. No code inserts text into other apps, sends messages, or opens external sites. Recordings, reference audio, trained models, logs and app bundles are ignored by Git.
+Views are enabled from saved capabilities; changing the view cannot recover a TLV that was never captured. This release's azimuth view uses detected points, not an uncalibrated FFT of the AOP antenna geometry. DCA range–Doppler is computed from complete chirp bursts on replay. No spatial calibration or custom firmware is silently applied. See [hardware details](HARDWARE.md).
+
+## Training
+
+The Training tab retains the existing CPU **phrase baseline**. Choose matching reviewed phrase blocks for fitting and whole-block holdout, with at least two examples of every label on each side. Use one speech mode, participant, source and profile. Reserved validation/final-test blocks cannot be fitted; calibration references are not evaluation blocks. Reader passages are retained for future sequence models and are excluded from this classifier.
+
+Word boundaries help inspection and future segment-level experiments, but sequence CTC training can use a full passage transcript without manual word times. The current app does not yet implement a sequence trainer or open dictation. See [data and training](DATA_AND_TRAINING.md).
+
+## Local files and timing
+
+Installed-app data is in `~/Library/Application Support/Gasp/Recordings`; the menu item **Show local recordings** opens it. Logs are in the neighboring `Logs` folder. The source workbench's `data/` directory is separate. Reinstalling the app preserves recordings.
+
+USB stores the complex heatmaps and original UART packets, including enabled diagnostic TLVs. DCA stores original ADC data/manifests and derived range FFTs with burst timing and known loss indices. Native WAV metadata records first-sample host time, sample position/rate and discontinuities. Cue/hold events carry host-clock estimates and uncertainty. These are software timing anchors, not hardware synchronization.
+
+The local server binds to loopback and requires a per-launch token. Reference audio, models, logs, recordings and app bundles are ignored by Git. Optional on-device speech assists annotation/scrolling only; it does not insert text or enable radar predictions.
 
 ## Build from source
 
-On an Apple Silicon Mac with the Command Line Tools for Xcode, Python 3.12 and uv:
+On an Apple Silicon Mac with Command Line Tools for Xcode, Python 3.12 and uv:
 
 ```sh
 uv sync --frozen --extra dev --extra macos-build
@@ -60,8 +83,6 @@ uv sync --frozen --extra dev --extra macos-build
 ./scripts/install-macos.sh
 ```
 
-The build freezes the capture engine, compiles the AppKit/WebKit/SwiftUI shell with `swiftc`, includes dependency license notices, and applies an ad-hoc signature. It outputs `dist/Gasp.app`. The app has been built and exercised on Apple Silicon macOS 26; other OS/hardware combinations are unverified. The native shell declares macOS 13 as its minimum, but that is not an end-to-end compatibility guarantee for every bundled library.
+The build freezes the Python worker and compiles the AppKit/WebKit/SwiftUI shell with Apple's Speech framework. It outputs `dist/Gasp.app`, with dependency notices and an ad-hoc signature. Tested on Apple Silicon macOS 26. The declared minimum is macOS 13, but other OS/hardware combinations are unverified. Distribution needs Developer ID signing/notarization; this project does not disable Gatekeeper.
 
-This development build is **not Developer ID signed or notarized**. Distribution to other Macs needs the normal signing/notarization work. This repository does not disable Gatekeeper or security settings.
-
-Validation includes simulated capture/review/resume, native launch and clean shutdown, recorded shortcut gesture sequences, and serial/UDP DCA emulators. Physical radar behavior, speech accuracy, real microphone timing and a permission-granted global shortcut still need hardware/interactive validation.
+See [verification](VERIFICATION.md) for the distinction between physical USB checks, synthetic UI/bundle checks, emulated DCA behavior, and microphone/speech checks still needed.

@@ -132,7 +132,8 @@ class Engine:
             if self.recording:
                 raise ValueError("A trial is active")
             kind = getattr(self.source, "kind", "simulator" if self.source.synthetic else "serial")
-            self.session = self.store.create_session(name, subject, kind, self.profile, notes, collection)
+            self.session = self.store.create_session(name, subject, kind, self.profile, notes, collection,
+                                                    getattr(self.source, "device_info", {}))
             self.last_trial = None
             return self.session
 
@@ -145,6 +146,8 @@ class Engine:
             is_dca = isinstance(self.source, DCASource)
             if is_dca and duration > 25:
                 raise ValueError("DCA takes are limited to 25 seconds")
+            if duration > 180:
+                raise ValueError("USB passages are limited to three minutes; split longer scripts into passages")
             if not is_dca and (not self.ring or (time.monotonic_ns() - self.ring[-1]["t"]) > 2e9):
                 raise ValueError("No recent complex heatmap; check guiMonitor, profile and firmware")
             rid = uuid.uuid4().hex

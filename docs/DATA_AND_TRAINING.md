@@ -10,9 +10,11 @@ Raw UART or ADC files, the exact radar configuration, timing/loss metadata, revi
 
 ## Labels and timing
 
-The first supervision is **confirmed text for the whole utterance**. Original prompts are immutable and preserved separately from reviewed verbatim text. New takes remain pending until explicitly approved; editing text or trim boundaries requires approval again. Silent-take text records the intended words, not an independently measured transcript.
+The first supervision is **confirmed text for the whole utterance**. Original prompts are immutable and preserved separately from reviewed verbatim text. New takes remain pending until explicitly approved; editing text, word intervals, audio offset or trim boundaries requires approval again. Silent-take text records the intended words, not an independently measured transcript.
 
-Audio/cue/radar alignment is software-based, with recorded uncertainty. USB timestamps describe packet arrival; DCA preserves its burst schedule and known missing frames. Device and transport delays remain unmeasured. There are no fabricated word or phoneme timestamps. Validate offsets on hardware before using fine temporal labels. See [timing and schema details](MAC_APP.md#radar-sources-and-timing).
+Audio/cue/radar alignment is software-based, with recorded uncertainty. USB timestamps describe packet arrival; DCA preserves its burst schedule and known missing frames. Device and transport delays remain unmeasured. Word intervals are optional, versioned annotations with manual, speech-estimate or imported-alignment provenance. Untimed words stay untimed. Optional local ASR estimates require review; imported forced alignment must match reviewed text. There are no fabricated phoneme timestamps. Validate offsets on hardware before using fine temporal labels. See [timing and schema details](MAC_APP.md#radar-sources-and-timing).
+
+Reader stores document order, script hashes, capture conditions and progress in bounded passages. Reader recordings are excluded from the phrase classifier and retained for future sequence training. CTC training can use passage transcripts without word boundaries; forced alignment is useful for inspection and segment-level experiments. Voiced alignment cannot establish silent-articulation timing.
 
 ## Baseline model
 

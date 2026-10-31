@@ -1,0 +1,14 @@
+{
+  "rear_shell_reinforced.stl": {
+    "triangles": 6518,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 46024.87167654705,
+    "bounds_mm": [
+      52.0,
+      175.88909,
+      32.3
+    ]
+  }
+}

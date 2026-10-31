@@ -1,148 +1,65 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gasp</title>
-  <link rel="stylesheet" href="/static/training.css" />
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gasp</title><link rel="stylesheet" href="/static/training.css"></head>
 <body>
-  <aside class="sidebar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">g</span>Gasp</div>
-    <nav aria-label="Workspace">
-      <button aria-label="Radar data" data-workspace="radar" data-page="collect" class="selected" aria-current="page">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l3-7 6 14 3-7h3"/></svg><span>Radar data</span>
-      </button>
-      <button aria-label="Dictation" data-workspace="dictation" data-page="dictation">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v1a6 6 0 0 0 12 0v-1M12 18v3m-3 0h6"/></svg><span>Dictation</span>
-      </button>
-    </nav>
-    <div id="radarSidebar" class="visit-sidebar">
-      <div class="visits-heading">Visits<button id="refreshVisits" title="Refresh visits" aria-label="Refresh visits">↻</button></div>
-      <div id="visits"></div>
-      <button class="new-visit" data-page="setup"><span aria-hidden="true">＋</span> New visit</button>
-    </div>
-    <div class="sidebar-bottom"><button data-page="dictation-settings" title="Settings" aria-label="Settings">⚙</button></div>
-  </aside>
-  <main>
-    <header class="workspace-header">
-      <h1 id="pageTitle">Radar data</h1>
-      <span class="status" id="connectionStatus">Not connected</span>
-      <span class="status" id="dictationStatus" hidden>Not configured</span>
-    </header>
-    <div id="radarTabs" class="tabs" role="navigation" aria-label="Radar data">
-      <button data-page="collect" class="selected" aria-current="page">Capture</button>
-      <button data-page="review">Recordings <span id="reviewBadge" class="nav-count">0</span></button>
-      <button data-page="train">Training</button>
-      <button data-page="setup" class="tab-end">Setup <span aria-hidden="true">↗</span></button>
-    </div>
-    <div id="dictationTabs" class="tabs" role="navigation" aria-label="Dictation" hidden>
-      <button data-page="dictation">History</button>
-      <button data-page="dictation-settings">Settings</button>
-    </div>
-    <div id="notice" role="status" hidden></div>
-
-    <section id="page-collect" class="page" role="region" aria-label="Radar capture" tabindex="-1">
-      <div class="section-heading"><div><span class="eyebrow">Current visit</span><h2 id="visitName">No visit selected</h2></div><div class="count"><strong id="keptCount">0</strong><span>verified</span></div></div>
-      <div class="collection-grid">
-        <article class="prompt-card">
-          <div class="card-top"><span id="deckName" class="eyebrow">Collection</span><span id="modeBadge" class="mode">SETUP</span></div>
-          <div class="progress" role="progressbar" aria-label="Verified script steps" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progressFill"></div></div>
-          <div class="prompt-area"><span id="stepCount" class="small"></span><h2 id="promptText">Create a visit</h2><p id="promptInstruction"></p></div>
-          <div id="recordingState" class="record-state">Ready</div>
-          <div class="record-controls"><button class="primary" id="recordButton">New visit <span aria-hidden="true">→</span></button><button class="quiet" id="cancelButton" hidden>Cancel</button></div>
-          <button class="shortcut" data-page="dictation-settings"><kbd>⌥</kbd><kbd>⌥</kbd><span id="shortcutHint">Recording shortcut</span></button>
-        </article>
-        <article class="signal-card">
-          <div class="card-top"><h3>Radar signal</h3><span id="signalKind" class="eyebrow">OFFLINE</span></div>
-          <canvas id="signal" height="180" aria-label="Radar phase signal"></canvas>
-          <div class="signal-stats"><span id="signalFrames">0 frames</span><span id="signalLoss">0 missing</span></div>
-          <p id="signalNote" class="small">No source connected</p>
-          <button class="quiet full-width" data-page="setup">Configure source</button>
-        </article>
-      </div>
-      <div id="latestTake" class="latest" hidden></div>
-    </section>
-
-    <section id="page-setup" class="page" role="region" aria-label="Radar setup" tabindex="-1" hidden>
-      <div class="section-heading"><h2>Setup</h2></div>
-      <div class="setup-grid">
-        <div class="settings-column">
-          <article class="form-card">
-            <h3>Capture source</h3>
-            <label>Source<select id="source"><option value="simulator">Simulator</option><option value="serial">IWR6843AOP · USB</option><option value="dca1000">DCA1000 · Ethernet</option></select></label>
-            <div id="hardwareFields" hidden>
-              <label>Command port<select id="cliPort"></select></label>
-              <label id="dataPortLabel">Data port<select id="dataPort"></select></label>
-              <button id="refreshPorts" class="quiet">Refresh ports</button>
-              <label>Profile<select id="profile"><option value="usb-phase-20hz">USB phase · 20 Hz</option><option value="usb-phase-10hz">USB phase · 10 Hz</option></select></label>
-            </div>
-            <div id="dcaFields" hidden>
-              <label>Mac Ethernet IPv4<input id="hostIp" value="192.168.33.30" /></label>
-              <label>DCA IPv4<input id="boardIp" value="192.168.33.180" /></label>
-              <label class="check"><input type="checkbox" id="confirmLayout" />Two-lane complex16, RX non-interleaved, TDM, no headers</label>
-            </div>
-            <p id="sourceHelp" class="small">Simulated data</p>
-            <div class="button-row"><button id="connectButton" class="primary">Connect</button><button id="disconnectButton" class="quiet">Disconnect</button></div>
-          </article>
-          <article class="form-card">
-            <h3>Reference audio</h3>
-            <label class="check"><input id="referenceAudio" type="checkbox" />Record microphone with each take</label>
-            <p id="audioHelp" class="small" aria-live="polite"></p>
-          </article>
-        </div>
-        <article class="form-card">
-          <h3>New visit</h3>
-          <form id="visitForm">
-            <div class="two"><label>Participant<input id="subject" value="Boyd" required maxlength="80" /></label><label>Visit name<input id="sessionName" required maxlength="120" /></label></div>
-            <label>Script<select id="deck"></select></label>
-            <details class="script-details"><summary>Script details</summary><p id="deckDescription" class="small"></p></details>
-            <div class="two"><label>Speech mode<select id="mode"><option value="paired">Aloud, then silent</option><option value="silent">Silent</option><option value="voiced">Aloud</option></select></label><label>Repetitions<select id="repetitions"><option>1</option><option selected>2</option><option>3</option><option>5</option><option>10</option></select></label></div>
-            <div class="two"><label>Dataset role<select id="visitRole"><option value="calibration">Calibration</option><option value="train">Training</option><option value="validation">Validation</option><option value="test">Final test</option></select></label><label>Distance (cm)<input id="distance" type="number" min="10" max="200" value="45" required /></label></div>
-            <details class="advanced"><summary>Placement &amp; calibration</summary><label>Calibration reference<select id="calibration"><option value="">None</option></select></label><label>Position / conditions<textarea id="positionNotes" rows="2" maxlength="2000" placeholder="Height, angle, posture, room"></textarea></label></details>
-            <button class="primary full-width" type="submit">Create visit <span aria-hidden="true">→</span></button>
+<aside class="sidebar">
+  <div class="brand"><span>g</span> Gasp</div>
+  <nav aria-label="Workspace"><button id="radarWorkspace" class="selected">⌁ <span>Radar data</span></button><button id="dictationWorkspace">♩ <span>Dictation</span></button></nav>
+  <button id="settingsButton" class="settings-link" aria-expanded="false">⚙ <span>Settings</span></button>
+</aside>
+<main>
+  <header><h1 id="workspaceTitle">Radar data</h1><span id="connectionStatus" class="status">Not connected</span></header>
+  <nav id="radarTabs" class="tabs" aria-label="Radar data"><button data-tab="capture" class="selected">Capture</button><button data-tab="train">Training</button></nav>
+  <div id="notice" role="status" hidden></div>
+  <section id="capturePage">
+    <div class="toolbar"><button id="toggleLibrary" aria-expanded="true">☷ Recordings</button><div class="toolbar-end"><button id="continueScript" hidden>Continue script</button><button id="newCapture" class="primary">＋ New capture</button></div></div>
+    <div id="captureLayout" class="capture-layout">
+      <aside id="library" class="library" aria-label="Recording history"><label class="search-label">Find a recording<input id="recordingSearch" type="search" placeholder="Script, person, location…"></label><div id="recordingList" class="recording-list"></div></aside>
+      <div class="capture-content">
+        <section id="captureWelcome" class="welcome"><h2>Capture radar training data</h2><button id="welcomeNew" class="primary">New capture</button></section>
+        <section id="captureSetup" hidden>
+          <div class="section-heading"><div><span class="eyebrow">NEW CAPTURE</span><h2>Choose a script</h2></div><button id="closeSetup">Close</button></div>
+          <form id="captureForm">
+            <div class="fields"><label>Script<select id="deck"></select></label><label>Speech mode<select id="mode"><option value="voiced">Aloud</option><option value="silent">Silently mouthed</option><option value="paired">Aloud, then silent</option></select></label></div>
+            <div id="customScriptFields" hidden><label id="scriptLabel">Text to read<textarea id="scriptText" rows="7" maxlength="200000" placeholder="Paste a passage, chapter, or book. Paragraphs are saved as resumable passages."></textarea></label><div class="inline"><label class="file-label">Import .txt<input id="scriptFile" type="file" accept=".txt,text/plain"></label><label>Reading pace (words/min)<input id="readerWpm" type="number" min="50" max="300" value="130"></label></div><p id="scriptSummary" class="subtle"></p></div>
+            <details open><summary>Capture conditions</summary><div class="fields"><label>Person<input id="subject" value="Boyd" required maxlength="80"></label><label>Distance (cm)<input id="distance" type="number" min="10" max="200" value="45" required></label><label>Location<input id="location" maxlength="120" placeholder="Office desk"></label><label>Enclosure<select id="enclosure"><option value="">Unknown / not specified</option><option>Bare board</option><option>Open aperture · v1.2</option><option>Solid front · v1.2</option><option>Full capture stack · v1.2</option><option>Standalone · v1.3</option></select></label><label>Mount<input id="mount" maxlength="120" placeholder="Fixed stand / arm"></label><label>Block name<input id="sessionName" maxlength="120" placeholder="Named automatically"></label></div><div class="fields thirds"><label>Yaw (°)<input id="yaw" type="number" min="-180" max="180" placeholder="Unknown"></label><label>Pitch (°)<input id="pitch" type="number" min="-180" max="180" placeholder="Unknown"></label><label>Roll (°)<input id="roll" type="number" min="-180" max="180" placeholder="Unknown"></label></div><p class="subtle">Sensor orientation relative to your face; zero means front-facing and level.</p><label>Placement notes<textarea id="positionNotes" rows="2" maxlength="2000"></textarea></label></details>
+            <details><summary>Collection options</summary><div class="fields"><label>Repetitions<select id="repetitions"><option>1</option><option selected>2</option><option>3</option><option>5</option><option>10</option></select></label><label>Dataset role<select id="visitRole"><option value="train">Training</option><option value="validation">Reserved validation</option><option value="test">Reserved final test</option><option value="calibration">Calibration</option></select></label></div></details>
+            <div class="action-row"><span id="captureSourceHint" class="subtle"></span><button class="primary" type="submit">Start script →</button></div>
+            <details><summary>Continue a saved script</summary><label>Recording block<select id="resumeBlock"></select></label><button id="resumeButton" type="button">Continue script</button></details>
           </form>
-        </article>
+        </section>
+        <section id="recordStage" hidden>
+          <div class="section-heading"><div><span id="captureMode" class="eyebrow"></span><h2 id="captureTitle"></h2></div><button id="editCaptureSetup">New script</button></div>
+          <div class="capture-stats"><span id="stepCount"></span><span id="sourceQuality"></span></div>
+          <div id="readerControls" class="reader-controls" hidden><label>Scroll<select id="readerFollow"><option value="paced">At reading pace</option><option value="voice">Follow voice · on device</option><option value="manual">Manual</option></select></label><label>Words/min<input id="pace" type="number" min="50" max="300" value="130"></label><button id="pauseScroll">Pause scroll</button></div>
+          <div id="promptViewport" class="prompt-viewport"><div id="promptText"></div></div>
+          <p id="promptInstruction" class="subtle"></p>
+          <div id="recordingState" class="recording-state" role="status">Ready</div>
+          <div class="record-controls"><button id="recordButton" class="primary">Record take</button><button id="cancelButton" hidden>Cancel</button><button id="repeatPrompt">Repeat previous prompt</button></div>
+          <p id="recordHelp" class="subtle"></p>
+          <div class="live-heading"><span>Live phase · range bin 8 / channel 1</span><span id="liveRate"></span></div><canvas id="liveSignal" height="85" aria-label="Live radar phase"></canvas>
+        </section>
+        <section id="replayStage" hidden>
+          <div class="section-heading"><div><span id="recordingBadge" class="eyebrow"></span><h2 id="recordingTitle"></h2></div><button id="detailsButton" aria-expanded="false">Details</button></div>
+          <div id="recordingDetails" class="details-panel" hidden></div>
+          <div class="view-controls"><label>View<select id="radarView"><option value="range-time">Range over time</option><option value="phase">Phase over time</option><option value="iq3d">I/Q trajectory · time as third axis</option><option value="range">Range · selected frame</option><option value="doppler">Range–Doppler</option><option value="points">3D detections</option><option value="azimuth">Range / azimuth detections</option></select></label><label>Range bin<input id="rangeBin" type="number" min="0" value="8"></label><label>Channel<select id="antenna"></select></label></div>
+          <canvas id="radarPlot" height="270" aria-label="Radar visualization"></canvas><div class="plot-caption"><span id="plotNote"></span><span id="plotFrame"></span></div>
+          <div class="player-controls"><button id="playButton" aria-label="Play recording">▶ Play</button><button id="stepBack" aria-label="Previous radar sample">‹</button><button id="stepForward" aria-label="Next radar sample">›</button><output id="playTime"></output><label class="compact">Speed<select id="playSpeed"><option value=".5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><button id="zoomOut" aria-label="Zoom out timeline">−</button><button id="zoomIn" aria-label="Zoom in timeline">＋</button></div>
+          <canvas id="timeline" height="180" tabindex="0" role="slider" aria-label="Shared audio and text timeline" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"></canvas>
+          <div class="timeline-help"><span id="timelineNote"></span><span>Space play · ← → step · [ ] set word edges</span></div>
+          <audio id="referencePlayer" preload="metadata" hidden></audio>
+          <div class="annotation-toolbar"><span id="selectedWordLabel">Select a word on the timeline</span><div class="inline"><button id="setWordStart">[ Start here</button><button id="setWordEnd">] End here</button><button id="clearWordTime">Clear timing</button></div></div>
+          <label>Reference text<textarea id="confirmedText" rows="3" maxlength="20000" placeholder="Confirm the words actually spoken or silently mouthed."></textarea></label>
+          <div class="inline"><button id="usePrompt">Use script</button><button id="suggestWords">Suggest word timing · on device</button><label class="file-label">Import alignment JSON<input id="alignmentFile" type="file" accept=".json,application/json"></label></div>
+          <details><summary>Timing &amp; notes</summary><div class="fields"><label>Speech start (s)<input id="trimStart" type="number" step=".01" min="0"></label><label>Speech end (s)<input id="trimEnd" type="number" step=".01" min="0"></label><label>Audio starts at radar time (s)<input id="audioOffset" type="number" step=".01"></label></div><p class="subtle">Audio/radar alignment uses host-clock estimates. Dragging labels does not improve sensor time resolution.</p><label>Notes<textarea id="reviewNotes" rows="2" maxlength="4000"></textarea></label></details>
+          <div class="review-actions"><span id="reviewState" role="status"></span><div class="inline"><button id="rejectTake">Reject</button><button id="saveAnnotations">Save draft</button><button id="keepTake" class="primary">Verify &amp; keep</button></div></div>
+        </section>
       </div>
-    </section>
-
-    <section id="page-review" class="page" role="region" aria-label="Radar recordings" tabindex="-1" hidden>
-      <div class="section-heading"><h2>Recordings</h2><select id="reviewSession" aria-label="Visit to review"></select></div>
-      <div class="review-grid"><div id="takeList" class="take-list"></div><article id="reviewDetail" class="review-detail"><p class="empty">Select a recording</p></article></div>
-    </section>
-
-    <section id="page-train" class="page" role="region" aria-label="Radar training" tabindex="-1" hidden>
-      <div class="section-heading"><h2>Training</h2></div>
-      <div class="setup-grid">
-        <article class="form-card">
-          <h3>Dataset</h3>
-          <label>Speech mode<select id="trainMode"><option value="silent">Silent</option><option value="voiced">Aloud</option><option value="whisper">Whispered</option></select></label>
-          <div class="two"><label>Range minimum (m)<input id="rangeMin" type="number" min="0" max="10" step=".01" value=".2" /></label><label>Maximum (m)<input id="rangeMax" type="number" min=".01" max="10" step=".01" value=".85" /></label></div>
-          <div id="trainVisits"></div>
-          <button class="primary full-width" id="trainButton">Train model <span aria-hidden="true">→</span></button>
-          <p id="trainState" class="small" aria-live="polite"></p>
-        </article>
-        <article class="form-card"><h3>Results</h3><div id="modelReports"><p class="empty">No models yet</p></div></article>
-      </div>
-    </section>
-
-    <section id="page-dictation" class="page" role="region" aria-label="Dictation history" tabindex="-1" hidden>
-      <div class="section-heading"><h2>History</h2><span class="small">0 dictations</span></div>
-      <div class="history-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/></svg><h3>No dictations yet</h3><button class="quiet" data-page="dictation-settings">Settings <span aria-hidden="true">↗</span></button></div>
-    </section>
-    <section id="page-dictation-settings" class="page" role="region" aria-label="Dictation settings" tabindex="-1" hidden>
-      <div class="section-heading"><h2>Settings</h2></div>
-      <div class="settings-panel">
-        <article class="form-card"><div class="setting-row"><div><h3>Speech model</h3><p class="small">Dictation is in development.</p></div><span class="mode">Not configured</span></div></article>
-        <article class="form-card">
-          <h3>Recording shortcut</h3>
-          <label>Double-tap key<select id="hotkey"><option value="61">Right Option</option><option value="62">Right Control</option><option value="63">Fn / Globe</option></select></label>
-          <button id="enableShortcut" class="quiet">Enable shortcut</button>
-          <p id="hotkeyHelp" class="small">Applies to radar capture.</p>
-        </article>
-      </div>
-    </section>
-  </main>
-  <script src="/static/training.js"></script>
-</body>
-</html>
+    </div>
+  </section>
+  <section id="trainingPage" hidden><div class="section-heading"><h2>Training</h2><span class="subtle">Phrase baseline</span></div><div class="training-grid"><section><label>Speech mode<select id="trainMode"><option value="silent">Silent</option><option value="voiced">Aloud</option><option value="whisper">Whispered</option></select></label><div class="fields"><label>Range minimum (m)<input id="rangeMin" type="number" step=".01" value=".2"></label><label>Maximum (m)<input id="rangeMax" type="number" step=".01" value=".85"></label></div><div id="trainBlocks"></div><button id="trainButton" class="primary">Train baseline</button><p id="trainState" role="status"></p></section><section><h3>Results</h3><div id="modelReports"></div></section></div></section>
+  <section id="dictationPage" hidden><div class="section-heading"><h2>History</h2></div><p class="subtle">No dictations yet.</p></section>
+</main>
+<dialog id="settingsDialog"><div class="section-heading"><h2>Settings</h2><button id="closeSettings">Close</button></div><h3>Capture source</h3><label>Source<select id="source"><option value="simulator">Simulator</option><option value="serial">IWR6843AOP · USB</option><option value="dca1000">DCA1000 · Ethernet</option></select></label><div id="hardwareFields" hidden><label>Command port<select id="cliPort"></select></label><label id="dataPortLabel">Data port<select id="dataPort"></select></label><button id="refreshPorts">Refresh ports</button><label>Profile<select id="profile"></select></label><p id="profileHelp" class="subtle"></p></div><div id="dcaFields" hidden><label>Mac Ethernet IPv4<input id="hostIp" value="192.168.33.30"></label><label>DCA IPv4<input id="boardIp" value="192.168.33.180"></label><label class="check"><input type="checkbox" id="confirmLayout">Two-lane complex16 ADC layout</label></div><div class="inline"><button id="connectButton" class="primary">Connect</button><button id="disconnectButton">Disconnect</button></div><hr><h3>Reference audio</h3><label class="check"><input type="checkbox" id="referenceAudio">Record microphone with each take</label><p id="audioHelp" class="subtle"></p><hr><h3>Recording shortcut</h3><label>Double-tap key<select id="hotkey"><option value="61">Right Option</option><option value="62">Right Control</option><option value="63">Fn / Globe</option></select></label><button id="enableShortcut">Enable shortcut</button><p id="hotkeyHelp" class="subtle"></p></dialog>
+<script src="/static/training.js"></script>
+</body></html>

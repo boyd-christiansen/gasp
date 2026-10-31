@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import time
 import uuid
+import math
 import numpy as np
 
 ID = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
@@ -34,13 +35,13 @@ class Store:
     def session_dir(self, sid):
         return self.root / "sessions" / checked_id(sid)
 
-    def create_session(self, name, subject, source, profile, notes="", collection=None):
+    def create_session(self, name, subject, source, profile, notes="", collection=None, device_info=None):
         sid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
         path = self.session_dir(sid)
         path.mkdir()
         manifest = {"schema": 1, "id": sid, "name": name, "subject": subject, "source": source,
                     "synthetic": source == "simulator", "created_ns": time.time_ns(),
-                    "profile": profile.summary(), "notes": notes}
+                    "profile": profile.summary(), "notes": notes, "device_info": device_info or {}}
         if collection:
             manifest.update(schema=2, collection=collection)
         atomic_json(path / "session.json", manifest)
@@ -100,24 +101,45 @@ class Store:
         with self.lock:
             path = self.trial_dir(sid, tid) / "trial.json"
             meta = json.loads(path.read_text())
-            for key in ("label", "accepted", "notes", "confirmed_text", "utterance_start_s", "utterance_end_s"):
+            revision = meta.get("annotation_revision", 0)
+            if "base_revision" in updates and updates["base_revision"] != revision:
+                raise ValueError("This recording was edited elsewhere; reload before saving")
+            for key in ("label", "accepted", "notes", "confirmed_text", "utterance_start_s", "utterance_end_s", "words", "audio_offset_s", "asr_raw_text"):
                 if key in updates:
                     meta[key] = updates[key]
+            if "confirmed_text" in updates and "words" not in updates and updates["confirmed_text"] != json.loads(path.read_text()).get("confirmed_text"):
+                meta["words"] = []
+            if "words" in updates:
+                previous_end = 0
+                for word in updates["words"]:
+                    if not word.get("text", "").strip():
+                        raise ValueError("Word text cannot be empty")
+                    a, b = word.get("start_s"), word.get("end_s")
+                    if a is None and b is None:
+                        continue
+                    if a is None or b is None or not all(math.isfinite(x) for x in (a,b)) or not 0 <= a < b <= meta["duration_s"]+.001 or a < previous_end:
+                        raise ValueError("Word intervals must be ordered, non-overlapping and inside the recording")
+                    previous_end = b
+                if " ".join(w["text"] for w in updates["words"]).split() != (meta.get("confirmed_text") or "").split():
+                    raise ValueError("Word annotations must match the confirmed transcript")
             if meta.get("collection_protocol"):
                 if "label" in updates:
                     raise ValueError("Review the confirmed transcript; the original prompt is immutable")
-                start, end = meta.get("utterance_start_s", 0), meta.get("utterance_end_s", meta["duration_s"])
-                if not 0 <= start < end <= meta["duration_s"] + .001:
-                    raise ValueError("Utterance boundaries must lie inside the saved radar recording")
                 if updates.get("accepted"):
                     if not (meta.get("confirmed_text") or "").strip():
                         raise ValueError("Confirm the actual text or movement label before accepting this take")
-                    meta.update(label=meta["confirmed_text"].strip(), review_status="verified",
-                                transcript_source="human_confirmed", reviewed_ns=time.time_ns())
-                elif "accepted" in updates:
-                    meta.update(review_status="rejected", reviewed_ns=time.time_ns())
-                elif any(k in updates for k in ("confirmed_text", "utterance_start_s", "utterance_end_s")):
+                    meta.update(label=meta["confirmed_text"].strip(), transcript_source="human_confirmed")
+            start, end = meta.get("utterance_start_s", 0), meta.get("utterance_end_s", meta["duration_s"])
+            if not all(math.isfinite(x) for x in (start, end)) or not 0 <= start < end <= meta["duration_s"] + .001:
+                raise ValueError("Utterance boundaries must lie inside the saved radar recording")
+            if "accepted" in updates:
+                meta.update(review_status="verified" if updates["accepted"] else "rejected", reviewed_ns=time.time_ns())
+            if any(k in updates for k in ("confirmed_text", "utterance_start_s", "utterance_end_s", "words", "audio_offset_s", "accepted")):
+                if "accepted" not in updates:
                     meta.update(accepted=False, review_status="pending")
+                history = path.parent / "annotations"
+                atomic_json(history / f"{revision:06d}.json", json.loads(path.read_text()))
+                meta["annotation_revision"] = revision + 1
             atomic_json(path, meta)
             return meta
 
@@ -133,7 +155,9 @@ class Store:
             plan_step_id=step_id, prompt_id=step["prompt_id"], prompt_text=step["prompt_text"],
             target_text=step["target_text"], pair_id=step["pair_id"], confirmed_text=None,
             asr_raw_text=None, output_text=None, transcript_source="unverified_prompt",
-            review_status="pending", accepted=False, calibration_id=collection.get("calibration_id"))
+            review_status="pending", accepted=False, calibration_id=collection.get("calibration_id"),
+            capture_conditions={k: collection.get(k) for k in ("distance_cm", "position_notes", "location", "enclosure", "mount", "yaw_deg", "pitch_deg", "roll_deg")},
+            script_sha256=collection["plan"].get("script_sha256"), task=collection["plan"].get("task", "phrases"))
 
     def add_trial_fields(self, sid, tid, fields):
         with self.lock:

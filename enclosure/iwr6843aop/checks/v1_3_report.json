@@ -1,0 +1,113 @@
+{
+  "part": {
+    "valid": true,
+    "sound": true,
+    "solids": 1,
+    "free_edges": 0,
+    "bounds_mm": [
+      52.0000002,
+      176.0000001,
+      32.3000002
+    ],
+    "volume_mm3": 46090.43425134822
+  },
+  "saddles": [
+    {
+      "original_xy": [
+        -11.7,
+        44
+      ],
+      "measured_upper_width_mm": 2.8000000000000096,
+      "measured_upper_length_mm": 6.0,
+      "root_bounds_mm": [
+        6.8000002000000315,
+        10.00000020000001,
+        8.1000002
+      ],
+      "pcb_contact_mm": 0.0,
+      "top_height_mm": 10.4000001
+    },
+    {
+      "original_xy": [
+        -11.7,
+        14
+      ],
+      "measured_upper_width_mm": 2.8000000000000096,
+      "measured_upper_length_mm": 6.0,
+      "root_bounds_mm": [
+        6.8000001999999995,
+        10.0000002,
+        8.1000002
+      ],
+      "pcb_contact_mm": 0.0,
+      "top_height_mm": 10.4000001
+    },
+    {
+      "original_xy": [
+        -7.15,
+        -42
+      ],
+      "measured_upper_width_mm": 2.8000000000000123,
+      "measured_upper_length_mm": 6.0,
+      "root_bounds_mm": [
+        6.8000002,
+        10.000000200000002,
+        8.1000002
+      ],
+      "pcb_contact_mm": 0.0,
+      "top_height_mm": 10.4000001
+    },
+    {
+      "original_xy": [
+        7.4,
+        -42
+      ],
+      "measured_upper_width_mm": 2.800000000000013,
+      "measured_upper_length_mm": 6.0,
+      "root_bounds_mm": [
+        6.8000002,
+        10.000000200000002,
+        8.1000002
+      ],
+      "pcb_contact_mm": 0.0,
+      "top_height_mm": 10.4000001
+    }
+  ],
+  "interferences_mm3": {
+    "front_radome": 0.0,
+    "nut_retainer": 0.0,
+    "pcb_PROC091G": 0.0,
+    "ref_U2": 0.0,
+    "ref_J2": 0.0,
+    "ref_J11": 0.0,
+    "ref_S2": 0.0,
+    "ref_S1": 0.0,
+    "ref_J5": 0.0,
+    "ref_J1": 0.0,
+    "ref_J7": 0.0,
+    "ref_J6": 0.0,
+    "ref_J10": 0.0,
+    "ref_J3": 0.0,
+    "ref_J8": 0.0,
+    "ref_S3": 0.0,
+    "ref_SW2": 0.0,
+    "ref_SW3": 0.0,
+    "ref_heatsink_envelope": 0.0,
+    "hardware_1_4_20_nut_threads_schematic": 0.0,
+    "ref_straight_USB_boot_11x20x6_cable_4p4": 0.0,
+    "pcb_washer_OD4p4_ID2p3_T0p6": 0.0
+  },
+  "measurements_mm": {
+    "roof_apex_z": -3.191673887931471,
+    "dock_seat_contact": 0.0
+  },
+  "limits": [
+    "User reported a fragile v1.2 PLA edge saddle and difficult automatic tree-support removal.",
+    "This revised geometry has not yet been physically printed, load tested or sliced for a specific printer.",
+    "Board and component references remain conservative envelopes from the earlier design."
+  ],
+  "removed_only_mount_roof_mm3": 42.60163964637754,
+  "added_only_saddle_material_mm3": 964.5292554826385,
+  "mount_roof_angle_degrees": 45,
+  "status": "PASS"
+}

@@ -61,6 +61,25 @@ class Frame:
             raise ValueError("Malformed range profile")
         return np.frombuffer(payload, dtype="<u2").astype(np.float32)
 
+    def range_doppler(self, range_bins, doppler_bins):
+        payload = self.tlvs.get(5)
+        if payload is None:
+            return None
+        if len(payload) != range_bins * doppler_bins * 2:
+            raise ValueError("Range–Doppler dimensions disagree with the capture profile")
+        return np.fft.fftshift(np.frombuffer(payload, dtype="<u2").reshape(range_bins, doppler_bins), axes=1)
+
+    def points(self):
+        payload = self.tlvs.get(1)
+        if payload is None:
+            return None
+        if len(payload) % 16:
+            raise ValueError("Malformed SDK 3.x Cartesian point cloud")
+        points = np.frombuffer(payload, dtype="<f4").reshape(-1, 4)
+        if not np.isfinite(points).all():
+            raise ValueError("Non-finite Cartesian point cloud")
+        return points
+
 
 class Parser:
     def __init__(self):

@@ -18,6 +18,12 @@ class Profile:
     chirp_period_us: float
     heatmap_enabled: bool
     lvds_adc: bool
+    doppler_enabled: bool = False
+    points_enabled: bool = False
+
+    @property
+    def doppler_bins(self):
+        return max(8, 1 << (self.loops - 1).bit_length())
 
     @property
     def frame_hz(self):
@@ -25,9 +31,16 @@ class Profile:
 
     def summary(self, baud=921600):
         # Worst-case all active AOP virtual antennas, range profile and stats.
-        packet_bytes = math.ceil((40 + 8 + self.range_bins * self.rx_count * self.tx_count * 4
-                                 + 8 + self.range_bins * 2 + 8 + 24) / 32) * 32
-        rate = packet_bytes * self.frame_hz if self.heatmap_enabled else 0
+        packet_bytes = 40 + 8 + self.range_bins * 2 + 8 + 24 + 8 + 28
+        if self.heatmap_enabled:
+            packet_bytes += 8 + self.range_bins * self.rx_count * self.tx_count * 4
+        if self.doppler_enabled:
+            packet_bytes += 8 + self.range_bins * self.doppler_bins * 2
+        if self.points_enabled:
+            # Conservative point-cloud reserve, including side information.
+            packet_bytes += 16 + 1024 * 20
+        packet_bytes = math.ceil(packet_bytes / 32) * 32
+        rate = packet_bytes * self.frame_hz
         return {**asdict(self), "frame_hz": self.frame_hz,
                 "adc_bytes_per_frame": self.adc_samples * self.rx_count * self.tx_count * self.loops * 4,
                 "adc_bytes_s": round(self.adc_samples * self.rx_count * self.tx_count * self.loops * 4 * self.frame_hz),
@@ -105,11 +118,12 @@ def parse_profile(text: str) -> Profile:
     canonical = "\n".join(commands(text)) + "\n"
     return Profile(canonical, hashlib.sha256(canonical.encode()).hexdigest(),
                    1 << (samples - 1).bit_length(), 299792458 * fs / (2 * slope * (1 << (samples - 1).bit_length())),
-                   period, rx, tx, samples, loops, idle + ramp, int(gui[5]) > 0, int(lvds[3]) == 1)
+                   period, rx, tx, samples, loops, idle + ramp, int(gui[5]) > 0, int(lvds[3]) == 1,
+                   int(gui[6]) > 0, int(gui[2]) > 0)
 
 
 def bundled_profile(name="usb-phase-20hz") -> Profile:
-    allowed = {"usb-phase-20hz", "usb-phase-10hz", "dca-raw"}
+    allowed = {"usb-phase-20hz", "usb-phase-10hz", "usb-doppler-10hz", "usb-spatial-2hz", "dca-raw"}
     if name not in allowed:
         raise ValueError("Unknown bundled profile")
     return parse_profile((Path(__file__).parent / "profiles" / (name + ".cfg")).read_text())

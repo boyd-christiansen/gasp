@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.boydchristiansen.gasp</string><key>CFBundleName</key><string>Gasp</string><key>CFBundleDisplayName</key><string>Gasp</string><key>CFBundleExecutable</key><string>Gasp</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.2.1</string><key>CFBundleVersion</key><string>2</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/>
+<key>CFBundleIdentifier</key><string>com.boydchristiansen.gasp</string><key>CFBundleName</key><string>Gasp</string><key>CFBundleDisplayName</key><string>Gasp</string><key>CFBundleExecutable</key><string>Gasp</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.3.0</string><key>CFBundleVersion</key><string>3</string><key>LSMinimumSystemVersion</key><string>13.0</string><key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>Record reference audio alongside radar training takes when you enable the microphone.</string>
+<key>NSSpeechRecognitionUsageDescription</key><string>Follow your reading and suggest word timing using on-device speech recognition when you request it. Dictation remains separate.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>

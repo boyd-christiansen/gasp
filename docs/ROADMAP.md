@@ -4,7 +4,7 @@
 
 Implemented: native Mac shell with bundled runtime, menu bar, recording overlay, configurable double-tap gesture, optional timestamped WAV audio, calibration/phrase/sentence decks, persistent visit plans, explicit human review, voiced/silent pairing and mode filtering, reserved dataset roles, and local phrase baseline training. Transcription and text insertion stay disabled. See [Mac app guide](MAC_APP.md).
 
-The global listener still needs interactive permission-granted verification; real microphone timing and physical radar validation remain pending. Calibration currently records personal references and coverage exercises; automatic face gating or model adaptation is not implemented.
+The global listener still needs interactive permission-granted verification. USB complex acquisition is verified on a Rev G board with SDK 03.06.02.00; real microphone timing, facial signals and physical DCA capture remain pending. Calibration currently records personal references and coverage exercises; automatic face gating or model adaptation is not implemented.
 
 ## Working software
 
@@ -14,18 +14,18 @@ The global listener still needs interactive permission-granted verification; rea
 - Prediction on saved takes, including DCA, with training/held-out/new provenance. Live-window inference on continuous USB.
 - Rev G standalone enclosure CAD with solid/open fronts, printable exports and renders.
 
-Software fixtures and emulators validate these paths. Physical radar, enclosure and silent-speech accuracy remain unvalidated.
+Software fixtures and emulators validate these paths. Physical USB streaming at 10 and 20 Hz is also verified; DCA capture, enclosure fit and silent-speech accuracy remain unvalidated. See [the verification record](VERIFICATION.md#physical-usb-bring-up--2026-10-31).
 
 ## First hardware session
 
-1. Identify the exact board revision/firmware and validate CLI/LVDS settings against it.
+1. USB CLI and complex streaming are verified for IWR6843AOPEVM Rev G / AOP SDK 03.06.02.00. Validate LVDS settings separately when connecting the carrier/DCA stack.
 2. Check a known reflector and repeatable jaw/lip motion. Compare the USB summary with full DCA input before collecting a large speech corpus.
 3. Verify ADC lane order, antenna mapping, actual chirp/frame timing, packet loss and phase continuity. The bundled DCA profile has 50 frames/s and 16 loops in short bursts; it is not uniform 800 Hz sampling or mSilent's 240 Hz schedule.
 4. Check recorded reference-media offsets and uncertainty using visible, radar-observable calibration motion. Host-clock estimates are not hardware synchronization.
 
 ## Data collection and models
 
-- Implemented in collection: USB pre/post-roll, separate prompt and human-confirmed transcript, and optional reviewed utterance boundaries. Next: validate timing and add assisted boundary review.
+- Implemented in collection: USB pre/post-roll, separate prompt and human-confirmed transcript, and optional reviewed utterance boundaries. Implemented next: a shared audio/text/radar timeline, draggable word edges, local speech estimates and alignment JSON import. Next: validate timing on physical speech captures.
 - Implemented: select one speech mode per baseline; rest and movement negatives retain separate labels. Next: measure transfer between voiced and silent data without pooling their evaluation.
 - Start with a small randomized phrase vocabulary across real acquisition visits. Reserve validation and final test visits before tuning.
 - Measure false activations during normal desk use, not just closed-set accuracy on prompted takes. Add duration/energy baselines and learning curves.

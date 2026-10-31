@@ -1,6 +1,8 @@
 """Versioned, local-only collection protocols. Prompts are never model inputs."""
 import random
 import uuid
+import re
+import hashlib
 
 PROTOCOL = "personal-training-v1"
 
@@ -48,17 +50,39 @@ DECKS = [
 ]
 
 
-def make_plan(deck_id, mode="silent", repetitions=2, seed=None):
+def make_plan(deck_id, mode="silent", repetitions=2, seed=None, script_text=None, words_per_minute=130):
     if mode not in {"silent", "voiced", "paired"}:
         raise ValueError("Choose silent, voiced or paired collection")
-    deck = next((d for d in DECKS if d["id"] == deck_id), None)
+    script = (script_text or "").strip()
+    if deck_id in {"reader", "custom-words"}:
+        if not script or len(script) > 200000:
+            raise ValueError("Enter up to 200,000 characters of script text")
+        if not 50 <= words_per_minute <= 300:
+            raise ValueError("Reading pace must be 50–300 words per minute")
+        if deck_id == "reader":
+            # A book is resumable passages, not an unbounded in-memory recording.
+            passages = []
+            for paragraph in re.split(r"\n\s*\n", script):
+                tokens = paragraph.split()
+                passages.extend(" ".join(tokens[i:i+120]) for i in range(0, len(tokens), 120))
+            prompts = [prompt(f"passage-{i+1}", text, min(180, max(15, len(text.split()) / words_per_minute * 60 + 20)))
+                       for i, text in enumerate(passages)]
+        else:
+            phrases = [s.strip() for s in script.splitlines() if s.strip()]
+            if any(len(s) > 200 for s in phrases):
+                raise ValueError("Use one word or short phrase (up to 200 characters) per line")
+            prompts = [prompt(f"word-{i+1}", text, 15) for i, text in enumerate(phrases)]
+        deck = dict(id=deck_id, name="Reader" if deck_id == "reader" else "Words & short phrases",
+                    calibration=False, prompts=prompts)
+    else:
+        deck = next((d for d in DECKS if d["id"] == deck_id), None)
     if not deck:
         raise ValueError("Unknown collection deck")
     if not 1 <= repetitions <= 10:
         raise ValueError("Use 1–10 repetitions")
     seed = uuid.uuid4().hex if seed is None else str(seed)
     units = [(p, rep) for rep in range(1 if deck["calibration"] else repetitions) for p in deck["prompts"]]
-    if not deck["calibration"]:
+    if not deck["calibration"] and deck_id != "reader":
         random.Random(seed).shuffle(units)
     plan = []
     for p, rep in units:
@@ -69,4 +93,6 @@ def make_plan(deck_id, mode="silent", repetitions=2, seed=None):
                 target_text=p["target"], duration_s=p["duration_s"], articulation=articulation,
                 instruction=p["instruction"], repetition=rep+1, pair_id=pair_id))
     return dict(protocol=PROTOCOL, deck_id=deck_id, deck_name=deck["name"], calibration=deck["calibration"],
-                mode=mode, repetitions=repetitions, seed=seed, steps=plan)
+                mode=mode, repetitions=repetitions, seed=seed, steps=plan,
+                script_text=script or None, script_sha256=hashlib.sha256(script.encode()).hexdigest() if script else None,
+                words_per_minute=words_per_minute, task="reading" if deck_id == "reader" else "phrases")

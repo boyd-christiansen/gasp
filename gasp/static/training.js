@@ -1,903 +1,117 @@
-"use strict";
-const $ = (id) => document.getElementById(id);
-const escapeHTML = (s) =>
-  String(s ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
-let state = {},
-  sessions = [],
-  decks = [],
-  trials = [],
-  activeSession = null,
-  activeRecord = null,
-  busy = false,
-  polling = false,
-  reviewTrials = [],
-  selectedTrial = null,
-  currentPage = "collect",
-  noticeTimer = null;
-let offsetMs = 0,
-  uncertaintyMs = 0,
-  audioActive = false,
-  audioStopped = false,
-  browserRecorder = null,
-  browserAudio = null,
-  browserBlob = null,
-  browserAudioStart = 0;
-const native = !!window.webkit?.messageHandlers?.gasp,
-  replies = new Map();
-window.nativeReply = (id, result, error) => {
-  const p = replies.get(id);
-  if (!p) return;
-  clearTimeout(p.timer);
-  replies.delete(id);
-  error ? p.reject(new Error(error)) : p.resolve(result);
-};
-function bridge(action, data = {}) {
-  if (!native)
-    return Promise.reject(
-      new Error("Open the installed Mac app for this feature."),
-    );
-  return new Promise((resolve, reject) => {
-    const id = crypto.randomUUID();
-    const timer = setTimeout(() => {
-      replies.delete(id);
-      reject(new Error("The Mac app did not respond."));
-    }, 60000);
-    replies.set(id, { resolve, reject, timer });
-    window.webkit.messageHandlers.gasp.postMessage({ id, action, ...data });
-  });
-}
-async function api(path, method = "GET", body) {
-  const response = await fetch("/api/" + path, {
-    method,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof result.detail === "string"
-        ? result.detail
-        : JSON.stringify(result.detail),
-    );
-  return result;
-}
-function notice(text, error = false) {
-  clearTimeout(noticeTimer);
-  $("notice").hidden = false;
-  $("notice").className = error ? "error" : "";
-  $("notice").textContent = text;
-  if (!error) noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 4500);
-}
-function act(id, fn) {
-  $(id).onclick = async (e) => {
-    e.preventDefault();
-    try {
-      await fn();
-    } catch (e) {
-      notice(e.message, true);
-    }
-  };
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function page(name, reload = true) {
-  const region = $("page-" + name);
-  if (!region) return;
-  currentPage = name;
-  const dictation = name.startsWith("dictation");
-  document.querySelectorAll(".page").forEach((e) => (e.hidden = e !== region));
-  document.querySelectorAll("[data-page]").forEach((e) => {
-    const selected = e.dataset.workspace
-      ? e.dataset.workspace === (dictation ? "dictation" : "radar")
-      : e.dataset.page === name;
-    e.classList.toggle("selected", selected);
-    if (selected) e.setAttribute("aria-current", "page");
-    else e.removeAttribute("aria-current");
-  });
-  $("radarSidebar").hidden = dictation;
-  $("radarTabs").hidden = dictation;
-  $("dictationTabs").hidden = !dictation;
-  $("connectionStatus").hidden = dictation;
-  $("dictationStatus").hidden = !dictation;
-  $("pageTitle").textContent = dictation ? "Dictation" : "Radar data";
-  $("notice").hidden = true;
-  region.focus({ preventScroll: true });
-  window.scrollTo(0, 0);
-  if (reload && name === "train") loadTraining().catch((e) => notice(e.message, true));
-  if (reload && name === "review") loadReview().catch((e) => notice(e.message, true));
-  if (name === "collect") plot("signal", state.phase || []);
-}
-document.querySelectorAll("[data-page]").forEach((e) => {
-  e.onclick = () => page(e.dataset.page);
-});
-function overlay(status, detail = "") {
-  if (native)
-    bridge("status", { status, detail, active: !!activeRecord }).catch(
-      () => {},
-    );
-}
-function currentStep() {
-  return activeSession?.collection?.plan.steps.find(
-    (s) =>
-      !trials.some(
-        (t) =>
-          t.plan_step_id === s.step_id &&
-          t.accepted &&
-          t.review_status === "verified",
-      ),
-  );
-}
-function pendingTake() {
-  const s = currentStep();
-  return (
-    s &&
-    [...trials]
-      .reverse()
-      .find(
-        (t) => t.plan_step_id === s.step_id && t.review_status === "pending",
-      )
-  );
-}
-function renderCollection() {
-  $("visits").querySelectorAll(".visit").forEach((b) => b.classList.toggle("active", b.dataset.id === activeSession?.id));
-  const plan = activeSession?.collection?.plan,
-    step = currentStep(),
-    kept = trials.filter(
-      (t) => t.accepted && t.review_status === "verified",
-    ).length;
-  $("keptCount").textContent = kept;
-  $("visitName").textContent = activeSession
-    ? activeSession.name
-    : "No visit selected";
-  $("deckName").textContent = plan?.deck_name || "Collection";
-  $("modeBadge").textContent = step
-    ? {
-        voiced: "SPEAK ALOUD",
-        silent: "MOUTH SILENTLY",
-        rest: "REST",
-        negative: "MOVEMENT",
-      }[step.articulation]
-    : plan
-      ? "COMPLETE"
-      : "SETUP";
-  $("modeBadge").className = "mode " + (step?.articulation || "");
-  const completed = plan
-    ? plan.steps.filter((s) =>
-        trials.some(
-          (t) =>
-            t.plan_step_id === s.step_id &&
-            t.accepted &&
-            t.review_status === "verified",
-        ),
-      ).length
-    : 0;
-  $("progressFill").style.width = plan
-    ? (100 * completed) / plan.steps.length + "%"
-    : "0%";
-  $("progressFill").parentElement.setAttribute("aria-valuenow", plan ? String(Math.round(100 * completed / plan.steps.length)) : "0");
-  $("stepCount").textContent = plan
-    ? `${completed} / ${plan.steps.length} verified`
-    : "";
-  $("promptText").textContent =
-    step?.prompt_text ||
-    (plan ? "Visit complete" : "Create a visit");
-  $("promptInstruction").textContent = step
-    ? step.instruction ||
-      (step.articulation === "silent"
-        ? "Mouth silently"
-        : "Speak aloud")
-    : plan
-      ? ""
-      : "";
-
-  if (!activeRecord) {
-    $("recordButton").textContent = !plan
-      ? "New visit →"
-      : !step
-        ? "New visit →"
-        : pendingTake()
-          ? "Review take →"
-          : "Record take";
-    $("recordButton").className = "primary";
-    $("recordButton").disabled = busy;
-    $("cancelButton").hidden = true;
-    $("recordingState").className = "record-state";
-    $("recordingState").textContent = pendingTake()
-      ? "Pending review"
-      : step
-        ? `Up to ${step.duration_s}s`
-        : "Ready";
-  }
-  const p = pendingTake();
-  $("latestTake").hidden = !p;
-  if (p) {
-    $("latestTake").innerHTML =
-      `<div><strong>Ready for review</strong><p>${p.frames} radar samples · ${p.duration_s.toFixed(1)} seconds · ${p.articulation}${p.synthetic ? " · SYNTHETIC" : ""}</p></div><button class="quiet" id="reviewLatest">Review take →</button>`;
-    $("reviewLatest").onclick = () => openReview(activeSession.id, p.id);
-  }
-}
-async function refreshVisits() {
-  sessions = await api("sessions");
-  $("visits").innerHTML =
-    sessions
-      .filter((s) => s.collection)
-      .map(
-        (s) =>
-          `<button class="visit${s.id === activeSession?.id ? " active" : ""}" data-id="${s.id}"><strong>${escapeHTML(s.name)}</strong><small>${s.accepted_count} verified · ${escapeHTML(s.collection.visit_role)}${s.synthetic ? " · SIM" : ""}</small></button>`,
-      )
-      .join("") ||
-    '<p class="small">No visits yet</p>';
-  $("visits")
-    .querySelectorAll("button")
-    .forEach(
-      (b) =>
-        (b.onclick = () =>
-          resume(b.dataset.id).catch((e) => notice(e.message, true))),
-    );
-  const previous = $("reviewSession").value;
-  $("reviewSession").innerHTML = sessions
-    .filter((s) => s.collection)
-    .map(
-      (s) =>
-        `<option value="${s.id}">${escapeHTML(s.name)}${s.synthetic ? " · SIM" : ""}</option>`,
-    )
-    .join("");
-  if (sessions.some((s) => s.id === previous))
-    $("reviewSession").value = previous;
-  else if (activeSession) $("reviewSession").value = activeSession.id;
-  $("calibration").innerHTML =
-    '<option value="">None</option>' +
-    sessions
-      .filter(
-        (s) =>
-          s.collection?.plan?.calibration &&
-          s.accepted_count > 0 &&
-          s.subject === $("subject").value &&
-          s.source === $("source").value,
-      )
-      .map((s) => `<option value="${s.id}">${escapeHTML(s.name)}</option>`)
-      .join("");
-  $("reviewBadge").textContent = sessions
-    .filter((s) => s.collection)
-    .reduce((n, s) => n + (s.pending_count || 0), 0);
-}
-async function resume(sid) {
-  if (busy) throw new Error("Finish the current take first.");
-  activeSession = await api("sessions/" + sid);
-  trials = await api("sessions/" + sid + "/trials");
-  renderCollection();
-  $("visits").querySelectorAll(".visit").forEach((b) => b.classList.toggle("active", b.dataset.id === sid));
-  page("collect");
-  if (state.status === "connected") {
-    try {
-      await api("sessions/" + sid + "/resume", "POST");
-      notice("Visit resumed");
-    } catch (e) {
-      notice(e.message + " You can still review saved takes.", true);
-    }
-  } else
-    notice(
-      "Visit loaded. Connect its source in Setup.",
-    );
-}
-act("refreshVisits", refreshVisits);
-async function ports() {
-  const ps = await api("ports");
-  for (const id of ["cliPort", "dataPort"]) {
-    const old = $(id).value;
-    $(id).innerHTML =
-      '<option value="">Choose a port…</option>' +
-      ps
-        .map(
-          (p) =>
-            `<option value="${escapeHTML(p.device)}">${escapeHTML(p.device)} · ${escapeHTML(p.interface || p.description)}</option>`,
-        )
-        .join("");
-    $(id).value = old;
-  }
-  if (!ps.length)
-    notice(
-      "No serial ports found",
-    );
-}
-function sourceChanged() {
-  const kind = $("source").value,
-    dca = kind === "dca1000";
-  $("hardwareFields").hidden = kind === "simulator";
-  $("dcaFields").hidden = !dca;
-  $("dataPortLabel").hidden = dca;
-  $("profile").innerHTML = dca
-    ? '<option value="dca-raw">DCA raw ADC · 50 frames/s in bursts</option>'
-    : '<option value="usb-phase-20hz">USB phase · 20 Hz</option><option value="usb-phase-10hz">USB phase · 10 Hz</option>';
-  $("sourceHelp").textContent =
-    kind === "simulator"
-      ? "Simulated data"
-      : dca
-        ? "MMWAVEICBOOST + DCA1000 · 25s take limit"
-        : "SDK 3.x OOB AOP firmware required";
-  if (kind !== "simulator") ports().catch((e) => notice(e.message, true));
-  refreshVisits().catch(() => {});
-}
-$("source").onchange = sourceChanged;
-act("refreshPorts", ports);
-act("connectButton", async () => {
-  if (busy) throw new Error("Finish the take first.");
-  $("connectButton").disabled = true;
-  try {
-    await api("connect", "POST", {
-      source: $("source").value,
-      profile: $("profile").value,
-      cli_port: $("cliPort").value || null,
-      data_port: $("dataPort").value || null,
-      host_ip: $("hostIp").value,
-      board_ip: $("boardIp").value,
-      confirm_layout: $("confirmLayout").checked,
-    });
-    notice(
-      $("source").value === "simulator"
-        ? "Simulator connected"
-        : "Source connected",
-    );
-    await poll();
-  } finally {
-    $("connectButton").disabled = false;
-  }
-});
-act("disconnectButton", async () => {
-  await api("disconnect", "POST");
-  await poll();
-  notice("Disconnected");
-});
-function deckChanged() {
-  const deck = decks.find((d) => d.id === $("deck").value);
-  $("deckDescription").textContent = deck.description;
-  $("visitRole").value = deck.calibration ? "calibration" : "train";
-  $("visitRole").disabled = deck.calibration;
-  $("repetitions").disabled = deck.calibration;
-}
-$("deck").onchange = deckChanged;
-$("subject").onchange = () => {
-  localStorage.setItem("gasp.subject", $("subject").value);
-  refreshVisits().catch(() => {});
-};
-$("visitForm").onsubmit = async (e) => {
-  e.preventDefault();
-  try {
-    if (busy) throw new Error("Finish the current take first.");
-    activeSession = await api("sessions", "POST", {
-      name: $("sessionName").value.trim(),
-      subject: $("subject").value.trim(),
-      collection: {
-        deck_id: $("deck").value,
-        mode: $("mode").value,
-        repetitions: Number($("repetitions").value),
-        visit_role: $("visitRole").value,
-        calibration_id: $("calibration").value || null,
-        distance_cm: Number($("distance").value),
-        position_notes: $("positionNotes").value,
-      },
-    });
-    trials = [];
-    renderCollection();
-    await refreshVisits();
-    page("collect");
-    notice("Visit created");
-    await poll();
-  } catch (e) {
-    notice(e.message, true);
-  }
-};
-async function clock() {
-  const a = performance.now(),
-    r = await api("clock"),
-    b = performance.now();
-  offsetMs = r.monotonic_ns / 1e6 - (a + b) / 2;
-  uncertaintyMs = (b - a) / 2;
-}
-$("referenceAudio").onchange = async () => {
-  try {
-    if (busy) throw new Error("Change reference audio between takes.");
-    if ($("referenceAudio").checked) {
-      if (native) {
-        await bridge("audioPermission");
-      } else {
-        browserAudio = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-      }
-      $("audioHelp").textContent =
-        "Microphone enabled";
-    } else {
-      browserAudio?.getTracks().forEach((t) => t.stop());
-      browserAudio = null;
-      $("audioHelp").textContent = "";
-    }
-  } catch (e) {
-    $("referenceAudio").checked = false;
-    notice(e.message, true);
-  }
-};
-async function startAudio() {
-  audioActive = false;
-  audioStopped = false;
-  browserBlob = null;
-  if (!$("referenceAudio").checked) return;
-  if (native) {
-    await bridge("audioStart");
-  } else {
-    if (!browserAudio) throw new Error("Enable reference audio again.");
-    const chunks = [];
-    browserRecorder = new MediaRecorder(browserAudio);
-    browserRecorder.addEventListener("dataavailable", (e) => {
-      if (e.data.size) chunks.push(e.data);
-    });
-    browserBlob = new Promise((resolve) => {
-      browserRecorder.onstop = () =>
-        resolve(new Blob(chunks, { type: browserRecorder.mimeType }));
-    });
-    browserAudioStart = (performance.now() + offsetMs) * 1e6;
-    browserRecorder.start();
-  }
-  audioActive = true;
-}
-async function stopAudio() {
-  if (!audioActive || audioStopped) return;
-  audioStopped = true;
-  if (native) await bridge("audioStop");
-  else if (browserRecorder?.state === "recording") browserRecorder.stop();
-}
-async function discardAudio() {
-  if (!audioActive) return;
-  try {
-    await stopAudio();
-    if (native) await bridge("audioDiscard");
-  } finally {
-    audioActive = false;
-  }
-}
-async function attachAudio(sid, tid) {
-  if (!audioActive) return;
-  await stopAudio();
-  if (native) await bridge("audioAttach", { sid, tid });
-  else {
-    const blob = await browserBlob;
-    const r = await fetch(`/api/sessions/${sid}/trials/${tid}/media`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": blob.type,
-        "X-Media-Start-Server-Ns": String(browserAudioStart),
-        "X-Clock-Uncertainty-Ms": String(uncertaintyMs),
-      },
-      body: blob,
-    });
-    if (!r.ok) throw new Error("Reference audio could not be attached.");
-  }
-  audioActive = false;
-}
-async function toggleRecording() {
-  if (activeRecord) {
-    const r = await api("record/" + activeRecord.id);
-    if (r.status === "recording")
-      await api("record/" + activeRecord.id + "/stop", "POST");
-    return;
-  }
-  if (busy) return;
-  if (currentPage.startsWith("dictation")) {
-    notice("Configure a speech model to use dictation.");
-    return;
-  }
-  if (!activeSession?.collection || !currentStep()) {
-    page("setup");
-    return;
-  }
-  if (pendingTake()) {
-    await openReview(activeSession.id, pendingTake().id);
-    return;
-  }
-  busy = true;
-  renderCollection();
-  let rid;
-  try {
-    await api("sessions/" + activeSession.id + "/resume", "POST");
-    await clock();
-    await startAudio();
-    const rec = await api("collect", "POST", {
-      step_id: currentStep().step_id,
-      reference_expected: $("referenceAudio").checked,
-    });
-    activeRecord = rec;
-    rid = rec.id;
-    let cued = false;
-    $("cancelButton").hidden = false;
-    while (true) {
-      const r = await api("record/" + rid);
-      if (r.status === "recording" && !cued) {
-        cued = true;
-        api("record/" + rid + "/events", "POST", {
-          name: "cue_shown",
-          estimated_server_ns: Math.round((performance.now() + offsetMs) * 1e6),
-          uncertainty_ms: uncertaintyMs,
-        }).catch(() => {});
-        if (native) await bridge("cue");
-        else {
-          try {
-            const a = new AudioContext(),
-              o = a.createOscillator(),
-              g = a.createGain();
-            o.connect(g);
-            g.connect(a.destination);
-            g.gain.value = 0.06;
-            o.frequency.value = 660;
-            o.start();
-            o.stop(a.currentTime + 0.09);
-            o.onended = () => a.close();
-          } catch {}
-        }
-      }
-      const status =
-        r.status === "arming"
-          ? "Arming sensor…"
-          : r.status === "recording"
-            ? "Recording"
-            : r.status === "processing"
-              ? "Saving radar data…"
-              : r.status === "cancelling"
-                ? "Cancelling…"
-                : r.status;
-      $("recordingState").textContent = status;
-      $("recordingState").className =
-        "record-state " + (r.status === "recording" ? "recording" : "");
-      $("recordButton").textContent =
-        r.status === "recording" ? "Finish take ■" : status;
-      $("recordButton").disabled = r.status !== "recording";
-      $("recordButton").className =
-        "primary " + (r.status === "recording" ? "recording" : "");
-      overlay(status, currentStep()?.prompt_text || "");
-      $("cancelButton").disabled =
-        r.status === "processing" || r.status === "cancelling";
-      if (r.status === "processing") await stopAudio();
-      if (["complete", "failed", "cancelled"].includes(r.status)) {
-        await stopAudio();
-        if (r.status === "complete") {
-          try {
-            await attachAudio(r.session_id, r.trial.id);
-          } catch (e) {
-            notice("Radar saved. Reference audio failed: " + e.message, true);
-            await discardAudio();
-          }
-          trials = await api("sessions/" + activeSession.id + "/trials");
-          await refreshVisits();
-          overlay("Saved · review take", r.trial.prompt_text);
-          notice(
-            "Take saved",
-          );
-        } else {
-          await discardAudio();
-          if (r.status === "failed")
-            throw new Error(r.error || "Capture failed.");
-          notice("Take cancelled. It will not be used for training.");
-        }
-        break;
-      }
-      await sleep(120);
-    }
-  } catch (e) {
-    if (rid) {
-      try {
-        await api("record/" + rid + "/cancel", "POST");
-      } catch {}
-    }
-    await discardAudio();
-    notice(e.message, true);
-    overlay("Capture needs attention", e.message);
-  } finally {
-    activeRecord = null;
-    busy = false;
-    renderCollection();
-  }
-}
-act("recordButton", toggleRecording);
-act("cancelButton", async () => {
-  if (activeRecord) await api("record/" + activeRecord.id + "/cancel", "POST");
-});
-window.addEventListener("gasp-toggle", () =>
-  toggleRecording().catch((e) => notice(e.message, true)),
-);
-window.addEventListener("gasp-cancel", () => {
-  if (activeRecord)
-    api("record/" + activeRecord.id + "/cancel", "POST").catch((e) =>
-      notice(e.message, true),
-    );
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && activeRecord && !native)
-    api("record/" + activeRecord.id + "/cancel", "POST").catch(() => {});
-});
-act("enableShortcut", async () => {
-  const r = await bridge("enableShortcut", {
-    keyCode: Number($("hotkey").value),
-  });
-  $("hotkeyHelp").textContent = r.message;
-  $("shortcutHint").textContent = r.enabled
-    ? `${$("hotkey").selectedOptions[0].text} · double tap to record`
-    : "Set recording shortcut";
-});
-function shortcutKeys() {
-  const symbol = {61: "⌥", 62: "⌃", 63: "fn"}[$("hotkey").value];
-  document.querySelectorAll(".shortcut kbd").forEach((k) => { k.textContent = symbol; });
-}
-$("hotkey").onchange = () => {
-  shortcutKeys();
-  if (native)
-    bridge("setShortcut", { keyCode: Number($("hotkey").value) }).catch((e) =>
-      notice(e.message, true),
-    );
-};
-async function loadReview(tid) {
-  const sid = $("reviewSession").value;
-  if (!sid) {
-    $("takeList").innerHTML = '<p class="empty">No recordings</p>';
-    return;
-  }
-  reviewTrials = await api("sessions/" + sid + "/trials");
-  $("takeList").innerHTML =
-    [...reviewTrials]
-      .reverse()
-      .map(
-        (t) =>
-          `<button class="take-item" data-id="${t.id}"><strong>${escapeHTML(t.prompt_text || t.label)}</strong><small>${escapeHTML(t.articulation)} · ${escapeHTML(t.review_status || "legacy")} · ${t.duration_s.toFixed(1)}s${t.synthetic ? " · SIM" : ""}</small></button>`,
-      )
-      .join("") || '<p class="empty">No recordings</p>';
-  $("takeList")
-    .querySelectorAll("button")
-    .forEach(
-      (b) =>
-        (b.onclick = () =>
-          showTake(b.dataset.id).catch((e) => notice(e.message, true))),
-    );
-  const selected =
-    tid ||
-    reviewTrials.find((t) => t.review_status === "pending")?.id ||
-    reviewTrials.at(-1)?.id;
-  if (selected) await showTake(selected);
-  else
-    $("reviewDetail").innerHTML =
-      '<p class="empty">No recordings in this visit</p>';
-}
-async function openReview(sid, tid) {
-  $("reviewSession").value = sid;
-  page("review", false);
-  await loadReview(tid);
-}
-$("reviewSession").onchange = () =>
-  loadReview().catch((e) => notice(e.message, true));
-async function showTake(tid) {
-  const t = reviewTrials.find((t) => t.id === tid);
-  if (!t) return;
-  selectedTrial = t;
-  $("takeList")
-    .querySelectorAll("button")
-    .forEach((b) => b.classList.toggle("active", b.dataset.id === tid));
-  const sid = $("reviewSession").value;
-  const negative = ["rest", "negative"].includes(t.articulation);
-  const loss = t.adc_quality
-    ? t.adc_quality.dropped_frames / Math.max(1, t.adc_quality.complete_frames)
-    : t.frame_gaps / Math.max(1, t.frames);
-  $("reviewDetail").innerHTML =
-    `<div class="card-top"><span class="eyebrow">${escapeHTML(t.articulation)}</span><span class="mode">${escapeHTML(t.review_status || "legacy")}${t.synthetic ? " · SIM" : ""}</span></div><h2>${escapeHTML(t.prompt_text || t.label)}</h2><div class="metadata">${t.frames} samples · ${t.duration_s.toFixed(2)}s · ${(loss * 100).toFixed(1)}% missing</div>${loss > 0.05 ? '<p class="warning">High frame loss · retake</p>' : ""}${t.media ? `<audio controls preload="metadata" src="/api/sessions/${sid}/trials/${tid}/media"></audio>` : (t.reference_expected ? '<p class="warning">Reference audio missing</p>' : "")}<canvas id="reviewSignal" height="100" aria-label="Saved radar phase signal" style="width:100%;height:100px;margin:15px 0"></canvas><label>${negative ? "Movement / rest label" : "Confirmed text"}<textarea id="confirmedText" rows="3" maxlength="200" placeholder="Words performed">${escapeHTML(t.confirmed_text || "")}</textarea></label><button class="quiet" id="useScript">Use ${negative ? "label" : "prompt"}</button><details class="advanced"><summary>Timing &amp; notes</summary><div class="two"><label>Start (s)<input id="trimStart" type="number" step=".01" min="0" value="${t.utterance_start_s || 0}"></label><label>End (s)<input id="trimEnd" type="number" step=".01" max="${t.duration_s}" value="${t.utterance_end_s || t.duration_s}"></label></div><label>Notes<textarea id="reviewNotes" rows="2" maxlength="4000">${escapeHTML(t.notes || "")}</textarea></label>${t.media ? `<p class="small">${escapeHTML(t.media.synchronization)}</p>` : ""}</details><div class="button-row"><button class="primary" id="keepTake">Verify & keep <span aria-hidden="true">→</span></button><button class="quiet" id="rejectTake">Reject</button></div>`;
-  $("useScript").onclick = () =>
-    ($("confirmedText").value = t.target_text || t.prompt_text || t.label);
-  act("keepTake", () => saveReview(true));
-  act("rejectTake", () => saveReview(false));
-  const signal = await api(`sessions/${sid}/trials/${tid}/signal`);
-  plot("reviewSignal", signal.phase);
-}
-async function saveReview(accepted) {
-  const sid = $("reviewSession").value,
-    t = selectedTrial;
-  await api(`sessions/${sid}/trials/${t.id}`, "PATCH", {
-    accepted,
-    confirmed_text: $("confirmedText").value.trim(),
-    notes: $("reviewNotes").value,
-    utterance_start_s: Number($("trimStart").value),
-    utterance_end_s: Number($("trimEnd").value),
-  });
-  await refreshVisits();
-  if (activeSession?.id === sid) {
-    trials = await api(`sessions/${sid}/trials`);
-    renderCollection();
-  }
-  await loadReview(t.id);
-  notice(
-    accepted
-      ? "Take verified"
-      : "Take rejected",
-  );
-  if (activeSession?.id === sid) {
-    page("collect");
-    overlay(accepted ? "Ready for next take" : "Ready to retake");
-  }
-}
-function plot(id, values = []) {
-  const c = $(id);
-  if (!c) return;
-  const rect = c.getBoundingClientRect();
-  if (!rect.width) return;
-  const ratio = devicePixelRatio || 1,
-    w = rect.width,
-    h = rect.height;
-  c.width = w * ratio;
-  c.height = h * ratio;
-  const x = c.getContext("2d");
-  x.scale(ratio, ratio);
-  x.strokeStyle = "#e5e5e5";
-  x.lineWidth = 0.7;
-  for (let i = 1; i < 4; i++) {
-    x.beginPath();
-    x.moveTo(0, (i * h) / 4);
-    x.lineTo(w, (i * h) / 4);
-    x.stroke();
-  }
-  if (values.length < 2) return;
-  const lo = Math.min(...values),
-    span = Math.max(0.01, Math.max(...values) - lo);
-  x.beginPath();
-  values.forEach((v, i) => {
-    const a = (i / (values.length - 1)) * w,
-      b = h - 9 - ((v - lo) / span) * (h - 18);
-    i ? x.lineTo(a, b) : x.moveTo(a, b);
-  });
-  x.strokeStyle = "#171717";
-  x.lineWidth = 1.5;
-  x.stroke();
-}
-async function poll() {
-  if (polling) return;
-  polling = true;
-  try {
-    state = await api("live");
-    const on = state.status === "connected";
-    $("connectionStatus").textContent = state.synthetic
-      ? "Simulator"
-      : on
-        ? "Radar connected"
-        : state.status === "error"
-          ? "Source error"
-          : "Not connected";
-    $("connectionStatus").className =
-      "status " + (state.synthetic ? "synthetic" : on ? "on" : "");
-    $("signalKind").textContent =
-      state.source === "dca1000"
-        ? "DCA"
-        : on
-          ? "PHASE"
-          : "OFFLINE";
-    plot("signal", state.phase || []);
-    $("signalFrames").textContent = state.frames + " frames";
-    $("signalLoss").textContent = state.frame_gaps + " missing";
-    $("signalNote").textContent =
-      state.error ||
-      (state.source === "dca1000"
-        ? "Updates after each take"
-        : state.synthetic
-          ? "Simulated signal"
-          : state.complex_available
-            ? `${state.measured_hz.toFixed(1)} samples/s`
-            : "No source connected");
-    if (!activeRecord)
-      overlay(
-        on ? "Ready to collect" : "Connect a source",
-        state.synthetic
-          ? "Simulator · synthetic"
-          : activeSession?.name || "Setup",
-      );
-  } catch (e) {
-    notice("Capture service unavailable: " + e.message, true);
-  } finally {
-    polling = false;
-  }
-}
-async function init() {
-  await api("health");
-  decks = await api("decks");
-  $("deck").innerHTML = decks
-    .map((d) => `<option value="${d.id}">${escapeHTML(d.name)}</option>`)
-    .join("");
-  deckChanged();
-  $("subject").value = localStorage.getItem("gasp.subject") || "Boyd";
-  $("sessionName").value =
-    "Visit · " +
-    new Date().toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  await refreshVisits();
-  await poll();
-  if (state.session?.collection) {
-    activeSession = state.session;
-    trials = await api("sessions/" + activeSession.id + "/trials");
-  }
-  renderCollection();
-  if (!native) {
-    $("hotkey").disabled = true;
-    $("enableShortcut").disabled = true;
-    $("hotkeyHelp").textContent =
-      "Available in the Mac app · radar capture";
-  } else {
-    const r = await bridge("info");
-    $("hotkey").value = String(r.keyCode);
-    $("hotkeyHelp").textContent = r.shortcutMessage;
-    $("shortcutHint").textContent = r.shortcutEnabled
-      ? `${$("hotkey").selectedOptions[0].text} · double tap to record`
-      : "Set recording shortcut";
-  }
-  shortcutKeys();
-  setInterval(poll, 700);
-}
-init().catch((e) => notice(e.message, true));
-
-async function loadTraining() {
-  await refreshVisits();
-  $("trainVisits").innerHTML =
-    sessions
-      .filter((s) => s.collection && !s.collection.plan.calibration)
-      .map(
-        (s) =>
-          `<label>${escapeHTML(s.name)} · ${s.accepted_count} verified${s.synthetic ? " · SIM" : ""}<select data-train-id="${s.id}"><option value="">Exclude visit</option>${!["validation", "test"].includes(s.collection.visit_role) ? '<option value="fit">Use for fitting</option>' : ""}${s.collection.visit_role !== "calibration" ? '<option value="test">Hold out for evaluation</option>' : ""}</select></label>`,
-      )
-      .join("") ||
-    '<p class="small">No eligible visits</p>';
-  await loadReports();
-}
-async function loadReports() {
-  const reports = await api("models");
-  $("modelReports").innerHTML = reports.map((r) =>
-    `<div class="report"><div class="card-top"><h3>${escapeHTML(r.articulation || "legacy")} phrase model</h3>${r.synthetic ? '<span class="mode">SIM</span>' : ""}</div><p class="small">${r.train_examples} training · ${r.test_examples} held out · ${r.labels.length} labels</p><p>${(r.accuracy * 100).toFixed(1)}% accuracy</p><div class="metadata">F1 ${r.macro_f1.toFixed(3)} · ${(r.majority_baseline * 100).toFixed(1)}% majority baseline<br>${escapeHTML(r.source)} · ${escapeHTML(r.id)}</div></div>`
-  ).join("") || '<p class="empty">No models yet</p>';
-
-}
-act("trainButton", async () => {
-  const selections = [...document.querySelectorAll("[data-train-id]")];
-  const selected = selections.filter((e) => e.value);
-  const held = selected
-    .filter((e) => e.value === "test")
-    .map((e) => e.dataset.trainId);
-  if (selected.length < 2 || !held.length || held.length === selected.length)
-    throw new Error(
-      "Choose at least one fitting visit and one whole held-out visit.",
-    );
-  $("trainButton").disabled = true;
-  try {
-    const job = await api("train", "POST", {
-      session_ids: selected.map((e) => e.dataset.trainId),
-      test_session_ids: held,
-      articulation: $("trainMode").value,
-      range_min_m: Number($("rangeMin").value),
-      range_max_m: Number($("rangeMax").value),
-    });
-    while (true) {
-      const r = await api("jobs/" + job.id);
-      $("trainState").textContent =
-        r.status === "failed"
-          ? r.error
-          : r.status === "complete"
-            ? "Model trained"
-            : "Training…";
-      if (r.status === "failed") throw new Error(r.error);
-      if (r.status === "complete") {
-        await loadReports();
-        break;
-      }
-      await sleep(400);
-    }
-  } finally {
-    $("trainButton").disabled = false;
-  }
-});
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const native=!!window.webkit?.messageHandlers?.gasp,replies=new Map();
+let state={},sessions=[],recordings=[],profiles=[],decks=[],activeSession=null,trials=[],activeRecord=null,busy=false,tab='capture',stage='welcome',dictation=false;
+let selected=null,replay=null,frame=null,words=[],wordIndex=-1,dirty=false,revision=0,undo=[],audioOffset=0,waveform=[],time=0,playing=false,lastTick=0,raf=0,zoom=1,viewStart=0,frameSeq=0,frameRequested=-1,frameLastAt=0,selectionSeq=0;
+let offsetMs=0,uncertaintyMs=0,audioActive=false,audioStopped=false,browserAudio=null,browserRecorder=null,browserBlob=null,browserAudioStart=0,hold=false,releaseRequested=false,cued=false,stepOverride=null,readerCursor=0,readerPaused=false,readerStarted=0,readerBase=0,readerLastTick=0;
+let heatCache=null;
+let orbit={yaw:.7,pitch:.35},orbitDrag=null,timelineDrag=null;
+const audio=$('referencePlayer');
+window.nativeReply=(id,result,error)=>{const p=replies.get(id);if(!p)return;clearTimeout(p.timer);replies.delete(id);error?p.reject(new Error(error)):p.resolve(result);};
+function bridge(action,data={}){if(!native)return Promise.reject(new Error('Open the installed Mac app for this feature.'));return new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{replies.delete(id);reject(new Error('The Mac app did not respond.'));},action==='speechAlign'?480000:120000);replies.set(id,{resolve,reject,timer});window.webkit.messageHandlers.gasp.postMessage({id,action,...data});});}
+async function api(path,method='GET',body){const r=await fetch('/api/'+path,{method,headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();if(!r.ok)throw new Error(typeof result.detail==='string'?result.detail:JSON.stringify(result.detail));return result;}
+let noticeTimer;function notice(text,error=false){clearTimeout(noticeTimer);$('notice').hidden=false;$('notice').className=error?'error':'';$('notice').textContent=text;if(!error)noticeTimer=setTimeout(()=>$('notice').hidden=true,6000);}
+function act(id,fn){$(id).onclick=async e=>{e.preventDefault();try{await fn(e);}catch(e){notice(e.message,true);}};}
+function overlay(status,detail=''){if(native)bridge('status',{status,detail,active:!!activeRecord}).catch(()=>{});}
+function setStage(value){stage=value;for(const [id,key]of [['captureWelcome','welcome'],['captureSetup','setup'],['recordStage','record'],['replayStage','replay']])$(id).hidden=value!==key;if(value!=='replay')pause();if(value==='record')renderPrompt();if(value==='replay'){drawRadar();drawTimeline();}}
+function showTab(value){if(busy&&dictation)return;tab=value;dictation=false;$('workspaceTitle').textContent='Radar data';$('radarWorkspace').classList.add('selected');$('dictationWorkspace').classList.remove('selected');$('radarTabs').hidden=false;$('capturePage').hidden=value!=='capture';$('trainingPage').hidden=value!=='train';$('dictationPage').hidden=true;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===value));if(value==='train'){pause();loadTraining().catch(e=>notice(e.message,true));}else{drawRadar();drawTimeline();}}
+$('radarWorkspace').onclick=()=>showTab('capture');$('dictationWorkspace').onclick=()=>{pause();dictation=true;$('workspaceTitle').textContent='Dictation';$('radarWorkspace').classList.remove('selected');$('dictationWorkspace').classList.add('selected');$('radarTabs').hidden=true;$('capturePage').hidden=true;$('trainingPage').hidden=true;$('dictationPage').hidden=false;};
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+act('settingsButton',()=>{$('settingsDialog').showModal();$('settingsButton').setAttribute('aria-expanded','true');});act('closeSettings',()=>$('settingsDialog').close());$('settingsDialog').addEventListener('close',()=>$('settingsButton').setAttribute('aria-expanded','false'));
+act('toggleLibrary',()=>{const hide=!$('library').hidden;$('library').hidden=hide;$('captureLayout').classList.toggle('collapsed',hide);$('toggleLibrary').setAttribute('aria-expanded',String(!hide));requestAnimationFrame(()=>{drawRadar();drawTimeline();});});
+function renderLibrary(){const q=$('recordingSearch').value.toLowerCase();const items=recordings.filter(t=>[t.prompt_text,t.label,t.subject,t.capture_conditions?.location,t.session_name].join(' ').toLowerCase().includes(q));$('recordingList').innerHTML=items.map(t=>`<button class="recording-item${selected?.id===t.id?' active':''}" data-sid="${t.session_id}" data-tid="${t.id}"><strong>${esc((t.prompt_text||t.label).split(/\s+/).slice(0,12).join(' '))}${(t.prompt_text||t.label).split(/\s+/).length>12?'…':''}</strong><small>${esc(t.subject)} · ${esc(t.articulation||'silent')}${t.synthetic?' · SIM':''}<br>${esc(t.review_status||'legacy')} · ${t.duration_s.toFixed(1)}s · ${new Date(t.created_ns/1e6).toLocaleDateString()}</small></button>`).join('')||'<p class="subtle">No matching recordings</p>';$('recordingList').querySelectorAll('button').forEach(b=>b.onclick=()=>openTake(b.dataset.sid,b.dataset.tid).catch(e=>notice(e.message,true)));}
+$('recordingSearch').oninput=renderLibrary;
+async function refreshLibrary(){[sessions,recordings]=await Promise.all([api('blocks'),api('recordings')]);if(activeSession)trials=await api('sessions/'+activeSession.id+'/trials');renderLibrary();$('resumeBlock').innerHTML=sessions.filter(s=>s.collection).map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.trial_count} takes${s.synthetic?' · SIM':''}</option>`).join('');}
+async function newCapture(){if(busy)throw new Error('Finish the active recording first.');await saveIfDirty();showTab('capture');setStage('setup');$('captureSourceHint').textContent=state.status==='connected'?'Source connected':'Connect a source in Settings first';}
+act('newCapture',newCapture);act('welcomeNew',newCapture);act('editCaptureSetup',newCapture);act('closeSetup',()=>setStage(selected?'replay':activeSession?'record':'welcome'));
+function deckChanged(){const custom=['reader','custom-words'].includes($('deck').value),reader=$('deck').value==='reader',cal=decks.find(d=>d.id===$('deck').value)?.calibration;$('customScriptFields').hidden=!custom;$('scriptLabel').firstChild.textContent=reader?'Text to read':'One word or short phrase per line';$('readerWpm').closest('label').hidden=!reader;$('repetitions').disabled=!!cal||reader;if(reader||cal)$('repetitions').value='1';$('visitRole').value=cal?'calibration':'train';$('visitRole').disabled=!!cal;scriptSummary();}
+function scriptSummary(){const count=$('scriptText').value.trim().split(/\s+/).filter(Boolean).length;$('scriptSummary').textContent=count?`${count.toLocaleString()} words · saved in resumable passages · pause between passages while data saves`:'';}
+$('deck').onchange=deckChanged;$('scriptText').oninput=scriptSummary;
+$('scriptFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.size>900000)return notice('Import a text file under 900 KB.',true);$('scriptText').value=(await f.text()).slice(0,200000);scriptSummary();};
+const conditionIds=['subject','distance','location','enclosure','mount','yaw','pitch','roll','positionNotes'];
+function saveConditions(){localStorage.setItem('gasp.conditions',JSON.stringify(Object.fromEntries(conditionIds.map(id=>[id,$(id).value]))));}
+$('captureForm').onsubmit=async e=>{e.preventDefault();try{if(busy)throw new Error('Finish the active take first.');const optional=id=>$(id).value===''?null:Number($(id).value);activeSession=await api('sessions','POST',{name:$('sessionName').value.trim()||`${$('deck').selectedOptions[0].text} · ${new Date().toLocaleString()}`,subject:$('subject').value.trim(),collection:{deck_id:$('deck').value,mode:$('mode').value,repetitions:Number($('repetitions').value),visit_role:$('visitRole').value,distance_cm:Number($('distance').value),location:$('location').value,enclosure:$('enclosure').value,mount:$('mount').value,yaw_deg:optional('yaw'),pitch_deg:optional('pitch'),roll_deg:optional('roll'),position_notes:$('positionNotes').value,script_text:['reader','custom-words'].includes($('deck').value)?$('scriptText').value:null,words_per_minute:Number($('readerWpm').value)}});trials=[];stepOverride=null;saveConditions();$('pace').value=activeSession.collection.plan.words_per_minute||130;await refreshLibrary();setStage('record');}catch(e){notice(e.message,true);}};
+async function resumeBlock(sid){if(busy)throw new Error('Finish the current take first.');await saveIfDirty();activeSession=await api('sessions/'+sid+'/resume','POST');trials=await api('sessions/'+sid+'/trials');stepOverride=null;$('pace').value=activeSession.collection.plan.words_per_minute||130;showTab('capture');setStage('record');}
+act('resumeButton',()=>resumeBlock($('resumeBlock').value));act('continueScript',()=>resumeBlock(selected.session_id));
+function currentStep(){const steps=activeSession?.collection?.plan.steps||[];if(stepOverride)return steps.find(s=>s.step_id===stepOverride);return steps.find(s=>!trials.some(t=>t.plan_step_id===s.step_id&&t.review_status!=='rejected'));}
+function renderPrompt(){$('pauseScroll').textContent='Pause scroll';const p=activeSession?.collection?.plan,s=currentStep();$('captureTitle').textContent=p?.deck_name||'Capture';$('captureMode').textContent=s?({silent:'Mouth silently',voiced:'Speak aloud',rest:'Rest',negative:'Movement'}[s.articulation]||s.articulation):'Script complete';const done=p?p.steps.filter(s=>trials.some(t=>t.plan_step_id===s.step_id&&t.review_status!=='rejected')).length:0;$('stepCount').textContent=p?`${done} / ${p.steps.length} captured · ${trials.filter(t=>t.review_status==='verified').length} reviewed`:'';const reader=p?.task==='reading';if(s?.articulation==='silent'&&$('readerFollow').value==='voice')$('readerFollow').value='paced';$('readerControls').hidden=!reader;readerCursor=0;readerBase=0;readerPaused=false;const tokens=(s?.prompt_text||'All prompts captured. Review your recordings in the library.').split(/\s+/);$('promptText').innerHTML=tokens.map((w,i)=>`<span class="prompt-word" data-word="${i}">${esc(w)}</span>`).join(' ');$('promptViewport').scrollTop=0;$('promptInstruction').textContent=s?.instruction||'';$('recordHelp').textContent=reader?'Read a full passage naturally, then finish. The next passage is saved separately.':'Hold Space or the record button; release to finish. Takes advance after saving and stay pending review.';if(!busy){$('recordButton').textContent=!s?'Review recordings':reader?'Start passage':'Hold Space to record';$('recordButton').disabled=!s;$('cancelButton').hidden=true;$('recordingState').textContent='Ready';}$('repeatPrompt').disabled=!trials.length;}
+act('repeatPrompt',()=>{if(busy)return;const last=trials.at(-1);if(last){stepOverride=last.plan_step_id;renderPrompt();}});
+async function ports(){const ps=await api('ports');for(const id of ['cliPort','dataPort']){const previous=$(id).value;$(id).innerHTML='<option value="">Choose a port…</option>'+ps.map(p=>`<option value="${esc(p.device)}">${esc(p.device)} · ${esc(p.interface||p.description)}</option>`).join('');$(id).value=previous;}}
+function sourceChanged(){const kind=$('source').value,dca=kind==='dca1000';$('hardwareFields').hidden=kind==='simulator';$('dataPortLabel').hidden=dca;$('dcaFields').hidden=!dca;$('profile').innerHTML=profiles.filter(p=>p.lvds_adc===dca).map(p=>`<option value="${p.name}">${esc(profileName(p.name))}</option>`).join('');if(!dca)$('profile').value='usb-phase-10hz';profileChanged();if(kind!=='simulator')ports().catch(e=>notice(e.message,true));}
+function profileName(name){return {'usb-phase-10hz':'Phase · 10 fps','usb-phase-20hz':'Phase · 20 fps','usb-doppler-10hz':'Phase + range–Doppler · 10 fps','usb-spatial-2hz':'Spatial diagnostics + Doppler · 2 fps','dca-raw':'DCA raw ADC · 50 fps'}[name]||name;}
+function profileChanged(){const p=profiles.find(p=>p.name===$('profile').value);$('profileHelp').textContent=p?`${p.range_bins} range bins · ${p.rx_count*p.tx_count} channels · ${Math.round(p.uart_utilization*100)}% conservative UART budget${p.points_enabled?' · verify spatial calibration':''}`:'';}
+$('source').onchange=sourceChanged;$('profile').onchange=profileChanged;act('refreshPorts',ports);
+act('connectButton',async()=>{if(busy)throw new Error('Finish the active take first.');$('connectButton').disabled=true;try{await api('connect','POST',{source:$('source').value,profile:$('profile').value,cli_port:$('cliPort').value||null,data_port:$('dataPort').value||null,host_ip:$('hostIp').value,board_ip:$('boardIp').value,confirm_layout:$('confirmLayout').checked});await poll();notice('Source connected');}finally{$('connectButton').disabled=false;}});
+act('disconnectButton',async()=>{await api('disconnect','POST');await poll();});
+$('referenceAudio').onchange=async()=>{try{if(busy)throw new Error('Change microphone settings between takes.');if($('referenceAudio').checked){if(native)await bridge('audioPermission');else browserAudio=await navigator.mediaDevices.getUserMedia({audio:true});$('audioHelp').textContent='Microphone enabled';}else{browserAudio?.getTracks().forEach(t=>t.stop());browserAudio=null;$('audioHelp').textContent='';}}catch(e){$('referenceAudio').checked=false;notice(e.message,true);}};
+async function clock(){const a=performance.now(),r=await api('clock'),b=performance.now();offsetMs=r.monotonic_ns/1e6-(a+b)/2;uncertaintyMs=(b-a)/2;}
+async function startAudio(){audioActive=false;audioStopped=false;browserBlob=null;if(!$('referenceAudio').checked)return;if(native)await bridge('audioStart',{followSpeech:activeSession?.collection?.plan.task==='reading'&&$('readerFollow').value==='voice'});else{if(!browserAudio)throw new Error('Enable reference audio again.');const chunks=[];browserRecorder=new MediaRecorder(browserAudio);browserRecorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};browserBlob=new Promise(resolve=>browserRecorder.onstop=()=>resolve(new Blob(chunks,{type:browserRecorder.mimeType})));browserAudioStart=(performance.now()+offsetMs)*1e6;browserRecorder.start();}audioActive=true;}
+async function stopAudio(){if(!audioActive||audioStopped)return;audioStopped=true;if(native)await bridge('audioStop');else if(browserRecorder?.state==='recording')browserRecorder.stop();}
+async function discardAudio(){if(!audioActive)return;try{await stopAudio();if(native)await bridge('audioDiscard');}finally{audioActive=false;}}
+async function attachAudio(sid,tid){if(!audioActive)return;await stopAudio();if(native)await bridge('audioAttach',{sid,tid});else{const blob=await browserBlob,r=await fetch(`/api/sessions/${sid}/trials/${tid}/media`,{method:'PUT',headers:{'Content-Type':blob.type,'X-Media-Start-Server-Ns':String(browserAudioStart),'X-Clock-Uncertainty-Ms':String(uncertaintyMs)},body:blob});if(!r.ok)throw new Error('Reference audio attachment failed.');}audioActive=false;}
+async function event(name,word_index){if(!activeRecord)return;await api('record/'+activeRecord.id+'/events','POST',{name,estimated_server_ns:Math.round((performance.now()+offsetMs)*1e6),uncertainty_ms:uncertaintyMs,word_index}).catch(()=>{});}
+async function finishTake(){releaseRequested=true;if(!activeRecord)return;await event('key_up');const r=await api('record/'+activeRecord.id);if(!cued||r.status==='arming'){await api('record/'+activeRecord.id+'/cancel','POST');return;}if(r.status==='recording'){const elapsed=(performance.now()+offsetMs)-r.server_monotonic_start_ns/1e6;const minimum=state.source==='dca1000'?510:Math.max(510,8000/(state.profile?.frame_hz||20));if(minimum-elapsed>700)$('recordingState').textContent='Finishing minimum radar window…';await sleep(Math.max(0,minimum-elapsed));if(activeRecord)await api('record/'+activeRecord.id+'/stop','POST');}}
+async function toggleRecording(){if(activeRecord){await finishTake();return;}if(busy)return;if(dictation||tab!=='capture')return;if(stage!=='record'||!currentStep()){await newCapture();return;}busy=true;$('readerFollow').disabled=true;releaseRequested=false;cued=false;const step=currentStep();let rid;try{if(activeSession.collection.plan.task==='reading'&&$('readerFollow').value==='voice'&&(!$('referenceAudio').checked||!native))throw new Error('Voice following needs reference audio and the installed app.');await api('sessions/'+activeSession.id+'/resume','POST');await clock();await startAudio();const rec=await api('collect','POST',{step_id:step.step_id,reference_expected:$('referenceAudio').checked,capture_method:activeSession.collection.plan.task==='reading'?'reader':hold?'hold':'button',reader_follow:activeSession.collection.plan.task==='reading'?$('readerFollow').value:null,reader_wpm:activeSession.collection.plan.task==='reading'?Number($('pace').value):null});activeRecord=rec;rid=rec.id;await event('key_down');$('cancelButton').hidden=false;if(releaseRequested)await finishTake();while(true){const r=await api('record/'+rid);if(r.status==='recording'&&!cued){cued=true;readerStarted=performance.now();readerLastTick=readerStarted;await event('cue_shown');if(native)await bridge('cue');if(releaseRequested)await finishTake();}const label={arming:'Arming sensor…',recording:'Recording',processing:'Saving…',cancelling:'Cancelling…'}[r.status]||r.status;$('recordingState').textContent=label;$('recordingState').classList.toggle('active',r.status==='recording');$('recordButton').textContent=r.status==='recording'?(activeSession.collection.plan.task==='reading'?'Finish passage':'Release to finish'):label;$('recordButton').disabled=!['recording','arming'].includes(r.status);overlay(label,step.prompt_text);if(r.status==='processing')await stopAudio();if(['complete','failed','cancelled'].includes(r.status)){await stopAudio();if(r.status==='complete'){try{await attachAudio(r.session_id,r.trial.id);}catch(e){notice('Radar saved; audio needs attention: '+e.message,true);await discardAudio();}trials=await api('sessions/'+activeSession.id+'/trials');stepOverride=null;await refreshLibrary();overlay('Saved · pending review',step.prompt_text);}else{await discardAudio();if(r.status==='failed')throw new Error(r.error||'Capture failed.');notice('Take cancelled.');}break;}await sleep(120);}}catch(e){if(rid)await api('record/'+rid+'/cancel','POST').catch(()=>{});await discardAudio();notice(e.message,true);}finally{activeRecord=null;busy=false;hold=false;$('readerFollow').disabled=false;renderPrompt();}}
+function beginHold(){if(busy||!currentStep())return;hold=true;toggleRecording().catch(e=>notice(e.message,true));}
+const recordButton=$('recordButton');recordButton.onpointerdown=e=>{if(activeSession?.collection?.plan.task!=='reading'&&stage==='record'){e.preventDefault();recordButton.setPointerCapture(e.pointerId);beginHold();}};recordButton.onpointerup=()=>{if(hold){hold=false;finishTake().catch(e=>notice(e.message,true));}};recordButton.onpointercancel=()=>{hold=false;if(activeRecord)api('record/'+activeRecord.id+'/cancel','POST').catch(()=>{});};recordButton.onclick=()=>{if(activeSession?.collection?.plan.task==='reading')toggleRecording().catch(e=>notice(e.message,true));};
+act('cancelButton',()=>activeRecord&&api('record/'+activeRecord.id+'/cancel','POST'));
+window.addEventListener('blur',()=>{if(hold){hold=false;releaseRequested=true;if(activeRecord)api('record/'+activeRecord.id+'/cancel','POST').catch(()=>{});}});
+window.addEventListener('gasp-toggle',()=>{hold=false;toggleRecording().catch(e=>notice(e.message,true));});window.addEventListener('gasp-cancel',()=>{if(activeRecord)api('record/'+activeRecord.id+'/cancel','POST').catch(()=>{});});
+$('readerFollow').onchange=async()=>{try{if(busy)throw new Error('Change scrolling mode between takes.');if($('readerFollow').value==='voice'){if(!native)throw new Error('Voice following is available in the installed app.');await bridge('speechPermission');if(!$('referenceAudio').checked)notice('Enable reference audio in Settings to follow your voice.');}}catch(e){$('readerFollow').value='paced';notice(e.message,true);}};
+act('pauseScroll',()=>{readerPaused=!readerPaused;$('pauseScroll').textContent=readerPaused?'Resume scroll':'Pause scroll';});
+function highlightReader(index){const elements=$('promptText').querySelectorAll('.prompt-word');readerCursor=Math.max(0,Math.min(index,elements.length-1));elements.forEach((e,i)=>e.classList.toggle('current',i===readerCursor));const target=elements[readerCursor];if(target){const container=$('promptViewport'),top=target.getBoundingClientRect().top-container.getBoundingClientRect().top+container.scrollTop;container.scrollTo({top:Math.max(0,top-container.clientHeight*.35),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}}
+window.nativeSpeech=payload=>{if(payload.error){if(activeRecord&&!audioStopped){readerPaused=true;notice('Voice following stopped: '+payload.error+'. Use paced or manual scrolling for the next take.',true);}return;}if(!activeRecord||stage!=='record'||$('readerFollow').value!=='voice')return;const norm=w=>w.toLowerCase().replace(/[^\p{L}\p{N}']/gu,'');const hypothesis=(payload.text||'').split(/\s+/).map(norm).filter(Boolean),reference=currentStep().prompt_text.split(/\s+/).map(norm);if(hypothesis.length<2)return;const tail=hypothesis.slice(-2);for(let i=Math.max(1,readerCursor-4);i<Math.min(reference.length,readerCursor+25);i++)if(reference[i-1]===tail[0]&&reference[i]===tail[1]){highlightReader(i);break;}};
+function readerTick(){const now=performance.now(),dt=Math.min(.5,(now-readerLastTick)/1000);readerLastTick=now;if(activeRecord&&cued&&!readerPaused&&stage==='record'&&activeSession?.collection?.plan.task==='reading'&&$('readerFollow').value==='paced'){readerBase+=dt*Number($('pace').value)/60;const next=Math.floor(readerBase);if(next!==readerCursor)highlightReader(next);}}
+function canvas(id,height){const c=$(id),w=Math.max(180,c.clientWidth),dpr=devicePixelRatio||1;if(c.width!==Math.round(w*dpr)||c.height!==Math.round(height*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(height*dpr);}const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,height);ctx.font='10px -apple-system, sans-serif';ctx.fillStyle='#737373';return{c,ctx,w,h:height};}
+function line(ctx,values,x,y,color='#171717'){ctx.beginPath();let on=false;values.forEach((v,i)=>{if(v===null||!Number.isFinite(v)){on=false;return;}const a=x(i),b=y(v);on?ctx.lineTo(a,b):ctx.moveTo(a,b);on=true;});ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.stroke();}
+function drawLive(){const{ctx,w,h}=canvas('liveSignal',85),v=state.phase||[];if(v.length<2)return;const lo=Math.min(...v),hi=Math.max(...v);line(ctx,v,i=>i/(v.length-1)*w,v=>h-8-(v-lo)/(hi-lo||1)*(h-16));}
+function xWindow(){const duration=replay?.duration_s||1,span=duration/zoom;if(time<viewStart||time>viewStart+span)viewStart=Math.max(0,Math.min(duration-span,time-span*.4));return{start:viewStart,end:Math.min(duration,viewStart+span),span};}
+function nearest(values,value){let lo=0,hi=values.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(values[mid]<value)lo=mid+1;else hi=mid;}return lo>0&&Math.abs(values[lo-1]-value)<Math.abs(values[lo]-value)?lo-1:lo;}
+function actualTimes(){return replay?.all_time_s||replay?.time_s||[0];}
+function setTime(t,seekAudio=true){if(!replay)return;time=Math.max(0,Math.min(replay.duration_s,t));$('playTime').textContent=`${time.toFixed(2)} / ${replay.duration_s.toFixed(2)} s`;$('timeline').setAttribute('aria-valuenow',String(time));if(seekAudio&&selected?.media){const desired=Math.max(0,time-audioOffset);if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,desired);}drawTimeline();drawRadar();requestFrame();}
+function pause(){playing=false;cancelAnimationFrame(raf);audio.pause();$('playButton').textContent='▶ Play';}
+async function play(){if(!replay)return;if(playing){pause();return;}if(time>=replay.duration_s)setTime(0);playing=true;lastTick=0;$('playButton').textContent='Ⅱ Pause';audio.playbackRate=Number($('playSpeed').value);if(selected.media&&time>=audioOffset){try{await audio.play();}catch(e){pause();throw new Error('Audio playback could not start: '+e.message);}}raf=requestAnimationFrame(playTick);}
+function playTick(now){if(!playing)return;const dt=lastTick?(now-lastTick)/1000:0;lastTick=now;let next=time+dt*Number($('playSpeed').value);if(selected?.media){if(!audio.paused&&!audio.ended)next=audio.currentTime+audioOffset;else if(next>=audioOffset&&!audio.ended&&next-audioOffset<audio.duration){audio.currentTime=Math.max(0,next-audioOffset);audio.play().catch(()=>pause());}}setTime(next,false);if(time>=replay.duration_s)pause();else raf=requestAnimationFrame(playTick);}
+act('playButton',play);act('stepBack',()=>{pause();const ts=actualTimes();setTime(ts[Math.max(0,nearest(ts,time)-1)]);});act('stepForward',()=>{pause();const ts=actualTimes();setTime(ts[Math.min(ts.length-1,nearest(ts,time)+1)]);});$('playSpeed').onchange=()=>audio.playbackRate=Number($('playSpeed').value);act('zoomIn',()=>{zoom=Math.min(32,zoom*2);setTime(time);});act('zoomOut',()=>{zoom=Math.max(1,zoom/2);viewStart=0;setTime(time);});
+function pushUndo(){undo.push(JSON.stringify(words));if(undo.length>40)undo.shift();}
+function changed(){dirty=true;$('reviewState').textContent='Unsaved changes · needs review';drawTimeline();}
+function validWords(items=words){let end=0;for(const w of items){if(w.start_s==null&&w.end_s==null)continue;if(w.start_s==null||w.end_s==null||w.start_s<end||w.start_s<0||w.end_s<=w.start_s||w.end_s>replay.duration_s+.001)throw new Error('Finish both edges of each word; intervals must be ordered and inside the recording.');end=w.end_s;}}
+function updateWordLabel(){const w=words[wordIndex];$('selectedWordLabel').textContent=w?`${w.text} · ${w.start_s==null?'unplaced':w.start_s.toFixed(2)+'–'+(w.end_s==null?'…':w.end_s.toFixed(2))+' s'}${w.source==='speech_estimate'?' · speech estimate':''}`:'Select a word on the timeline';}
+function transcriptChanged(){const text=$('confirmedText').value.trim().split(/\s+/).filter(Boolean);if(text.join(' ')!==words.map(w=>w.text).join(' ')){pushUndo();let a=0;while(a<text.length&&a<words.length&&text[a]===words[a].text)a++;let b=text.length,c=words.length;while(b>a&&c>a&&text[b-1]===words[c-1].text){b--;c--;}const middle=text.slice(a,b).map((value,i)=>c-a===b-a?{...words[a+i],text:value,source:'manual'}:{text:value,start_s:null,end_s:null,source:'manual'});words=[...words.slice(0,a),...middle,...words.slice(c)];wordIndex=words.length?Math.max(0,Math.min(wordIndex,words.length-1)):-1;renderUnplaced();changed();}updateWordLabel();}
+$('confirmedText').oninput=transcriptChanged;
+function renderUnplaced(){let list=$('unplacedWords');if(!list){list=document.createElement('div');list.id='unplacedWords';list.className='unplaced-words';$('timeline').after(list);}list.innerHTML=words.map((w,i)=>w.start_s==null?`<button data-word="${i}"${i===wordIndex?' class="active"':''}>${esc(w.text)}</button>`:'').join('');list.querySelectorAll('button').forEach(b=>b.onclick=()=>{wordIndex=Number(b.dataset.word);updateWordLabel();drawTimeline();});}
+function setEdge(edge){if(!replay||!words[wordIndex])return;pushUndo();const w=words[wordIndex];w[edge]=actualTimes()[nearest(actualTimes(),time)];w.source='manual';changed();updateWordLabel();renderUnplaced();}
+act('setWordStart',()=>setEdge('start_s'));act('setWordEnd',()=>setEdge('end_s'));act('clearWordTime',()=>{if(!words[wordIndex])return;pushUndo();Object.assign(words[wordIndex],{start_s:null,end_s:null,source:'manual'});changed();renderUnplaced();updateWordLabel();});
+act('usePrompt',()=>{$('confirmedText').value=selected.target_text||selected.prompt_text||selected.label;transcriptChanged();});
+async function saveReview(accepted){if(!selected)return;if(accepted===false){const r=await api(`sessions/${selected.session_id}/trials/${selected.id}`,'PATCH',{accepted:false,base_revision:revision});selected={...selected,...r};revision=r.annotation_revision;dirty=false;$('reviewState').textContent='rejected';$('recordingBadge').textContent=`${selected.articulation||'silent'} · rejected${selected.synthetic?' · SIMULATOR':''}`;await refreshLibrary();return;}transcriptChanged();validWords();const take=selected;const payload={confirmed_text:$('confirmedText').value.trim(),utterance_start_s:Number($('trimStart').value),utterance_end_s:Number($('trimEnd').value),notes:$('reviewNotes').value,words,audio_offset_s:audioOffset,base_revision:revision,asr_raw_text:selected.asr_raw_text??null};if(accepted!==undefined)payload.accepted=accepted;const result=await api(`sessions/${take.session_id}/trials/${take.id}`,'PATCH',payload);if(selected?.id===take.id){selected={...take,...result};revision=result.annotation_revision;dirty=false;$('reviewState').textContent=result.review_status||'Saved';$('recordingBadge').textContent=`${result.articulation||'silent'} · ${result.review_status||'legacy'}${result.synthetic?' · SIMULATOR':''}`;}await refreshLibrary();}
+async function saveIfDirty(){if(dirty)await saveReview();}
+act('saveAnnotations',()=>saveReview());act('keepTake',()=>saveReview(true));act('rejectTake',()=>saveReview(false));
+for(const id of ['trimStart','trimEnd','reviewNotes'])$(id).oninput=changed;$('audioOffset').oninput=()=>{audioOffset=Number($('audioOffset').value);changed();setTime(time);};
+function drawTimeline(){if(!replay||stage!=='replay'||tab!=='capture'||dictation)return;const{ctx,w}=canvas('timeline',180),{start,end,span}=xWindow(),left=62,right=w-12,width=right-left,x=t=>left+(t-start)/span*width;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,180);ctx.strokeStyle='#dedede';ctx.beginPath();ctx.moveTo(left,33);ctx.lineTo(right,33);ctx.moveTo(left,103);ctx.lineTo(right,103);ctx.moveTo(left,161);ctx.lineTo(right,161);ctx.stroke();ctx.fillStyle='#777';ctx.fillText('Audio',2,68);ctx.fillText('Text',2,133);for(let i=0;i<=5;i++){const t=start+span*i/5;ctx.textAlign=i===0?'left':i===5?'right':'center';ctx.fillText(t.toFixed(span>20?0:1)+'s',x(t),22);}ctx.textAlign='left';ctx.save();ctx.beginPath();ctx.rect(left,34,width,128);ctx.clip();for(const gap of replay.gaps){if(gap[1]<start||gap[0]>end)continue;ctx.fillStyle='#e2e2e2';ctx.fillRect(x(gap[0]),34,Math.max(2,x(gap[1])-x(gap[0])),128);}if(waveform.length){ctx.strokeStyle='#444';ctx.beginPath();waveform.forEach((v,i)=>{const t=audioOffset+i/(waveform.length-1)*(Number.isFinite(audio.duration)?audio.duration:replay.duration_s);if(t<start||t>end)return;const xx=x(t);ctx.moveTo(xx,67-v*28);ctx.lineTo(xx,67+v*28);});ctx.stroke();}else{ctx.fillStyle='#888';ctx.fillText(selected.media?'Loading audio waveform…':'No reference audio',left+8,70);}words.forEach((word,i)=>{if(word.start_s==null||word.end_s==null||word.end_s<start||word.start_s>end)return;const a=x(word.start_s),b=x(word.end_s),active=i===wordIndex;ctx.fillStyle=active?'#171717':'#e7e7e7';ctx.fillRect(a,111,Math.max(2,b-a-2),37);ctx.fillStyle=active?'#fff':'#333';ctx.save();ctx.beginPath();ctx.rect(a+2,111,Math.max(0,b-a-5),37);ctx.clip();ctx.fillText(word.text,a+5,134);ctx.restore();if(active){ctx.strokeStyle='#171717';ctx.lineWidth=2;for(const edge of [a,b]){ctx.beginPath();ctx.moveTo(edge,105);ctx.lineTo(edge,156);ctx.stroke();ctx.fillStyle='#171717';ctx.fillRect(edge-3,104,6,9);}}});ctx.strokeStyle='#171717';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x(time),34);ctx.lineTo(x(time),162);ctx.stroke();ctx.restore();ctx.fillStyle='#777';ctx.fillText(replay.display_decimated?'Radar view decimated for display; edits use original sample times':'',left,176);}
+function timelineAt(e){const r=$('timeline').getBoundingClientRect(),v=xWindow();return Math.max(0,Math.min(replay.duration_s,v.start+(e.clientX-r.left-62)/(r.width-74)*v.span));}
+$('timeline').onpointerdown=e=>{if(!replay)return;pause();$('timeline').focus();const t=timelineAt(e),r=$('timeline').getBoundingClientRect(),y=e.clientY-r.top,tolerance=xWindow().span/(r.width-74)*9;const word=words[wordIndex];let edge=null;if(y>102&&word?.start_s!=null&&word?.end_s!=null){if(Math.abs(word.start_s-t)<tolerance)edge='start_s';else if(Math.abs(word.end_s-t)<tolerance)edge='end_s';}if(edge){pushUndo();timelineDrag={edge,index:wordIndex};}else{const idx=y>103?words.findIndex(w=>w.start_s!=null&&t>=w.start_s&&t<=w.end_s):-1;if(idx>=0){wordIndex=idx;setTime(words[idx].start_s);updateWordLabel();}else setTime(t);timelineDrag={edge:null};}$('timeline').setPointerCapture(e.pointerId);};
+$('timeline').onpointermove=e=>{if(!timelineDrag)return;const t=actualTimes()[nearest(actualTimes(),timelineAt(e))];if(timelineDrag.edge){const i=timelineDrag.index,w=words[i],prev=words.slice(0,i).filter(w=>w.end_s!=null).at(-1)?.end_s||0,next=words.slice(i+1).find(w=>w.start_s!=null)?.start_s??replay.duration_s;if(timelineDrag.edge==='start_s')w.start_s=Math.max(prev,Math.min(w.end_s-.001,t));else w.end_s=Math.min(next,Math.max(w.start_s+.001,t));w.source='manual';changed();updateWordLabel();}else setTime(t);};
+$('timeline').onpointerup=()=>{timelineDrag=null;};$('timeline').onpointercancel=()=>timelineDrag=null;
+function project(x,y,z,cx,cy,scale){const a=x*Math.cos(orbit.yaw)-z*Math.sin(orbit.yaw),b=x*Math.sin(orbit.yaw)+z*Math.cos(orbit.yaw);return[cx+a*scale,cy-(y*Math.cos(orbit.pitch)-b*Math.sin(orbit.pitch))*scale];}
+function drawRadar(){if(!replay||stage!=='replay'||tab!=='capture'||dictation)return;const{ctx,w,h}=canvas('radarPlot',220),left=52,top=14,right=w-15,bottom=h-35,width=right-left,height=bottom-top,mode=$('radarView').value;ctx.strokeStyle='#dedede';ctx.strokeRect(left,top,width,height);ctx.fillStyle='#777';const label=(x,y,text)=>ctx.fillText(text,x,y);const range=replay.range_m,ts=replay.time_s,sigTs=replay.signal_time_s||ts;let note='';ctx.save();ctx.beginPath();ctx.rect(left,top,width,height);ctx.clip();if(mode==='range-time'){const v=xWindow(),data=replay.range_time,key=[v.start,v.end,width,height].join(':');if(!heatCache||heatCache.key!==key){const image=document.createElement('canvas');image.width=Math.ceil(width);image.height=Math.ceil(height);const paint=image.getContext('2d'),max=replay.log_max||1;for(let i=0;i<data.length;i++){if(ts[i]<v.start||ts[i]>v.end)continue;const a=(ts[i]-v.start)/v.span*width,b=((ts[i+1]??(ts[i]+.1))-v.start)/v.span*width;for(let j=0;j<data[i].length;j++){const gray=Math.round(255-220*Math.min(1,Math.log1p(data[i][j])/max));paint.fillStyle=`rgb(${gray},${gray},${gray})`;paint.fillRect(a,j/data[i].length*height,Math.max(1,b-a+.5),height/data[i].length+.5);}}heatCache={key,image};}ctx.drawImage(heatCache.image,left,top,width,height);ctx.strokeStyle='#171717';ctx.beginPath();const x=left+(time-v.start)/v.span*width;ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke();note='Log amplitude · mean across channels';}else if(mode==='phase'){const v=xWindow(),values=replay.phase,visible=values.filter((_,i)=>sigTs[i]>=v.start&&sigTs[i]<=v.end),lo=Math.min(...visible),hi=Math.max(...visible);line(ctx,values,i=>left+(sigTs[i]-v.start)/v.span*width,z=>bottom-(z-lo)/(hi-lo||1)*height);ctx.strokeStyle='#bbb';const x=left+(time-v.start)/v.span*width;ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke();note='Unwrapped phase (rad) · low signal and gaps can make phase unreliable';}else if(mode==='range'){const values=frame?.range_magnitude||[],max=Math.max(1,...values);line(ctx,values,i=>left+i/(values.length-1)*width,v=>bottom-v/max*height);note='Range (m) × FFT magnitude (counts)';}else if(mode==='doppler'){const data=frame?.range_doppler;if(data){const vals=data.flat(),lo=Math.min(...vals),hi=Math.max(...vals);for(let r=0;r<data.length;r++)for(let d=0;d<data[r].length;d++){const gray=Math.round(255-220*(data[r][d]-lo)/(hi-lo||1));ctx.fillStyle=`rgb(${gray},${gray},${gray})`;ctx.fillRect(left+d/data[r].length*width,top+r/data.length*height,width/data[r].length+.5,height/data.length+.5);}note='Radial velocity (m/s) × range (m) · '+frame.doppler_unit;}else{ctx.fillStyle='#777';label(left+15,top+35,'No Doppler matrix in this frame');}}else if(mode==='iq3d'||mode==='points'){const cx=left+width/2,cy=top+height*.55,scale=Math.min(width,height)*.32;const axes=mode==='iq3d'?['I (counts)','Q (counts)','Time (s)']:['X (m)','Z (m)','Y (m)'];ctx.strokeStyle='#aaa';for(const [v,text]of [[[1,0,0],axes[0]],[[0,1,0],axes[1]],[[0,0,1],axes[2]]]){const a=project(0,0,0,cx,cy,scale),b=project(...v,cx,cy,scale);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.fillStyle='#555';label(Math.min(right-58,Math.max(left,b[0])),Math.min(bottom-3,Math.max(top+12,b[1])),text);}if(mode==='iq3d'){const keep=sigTs.map((t,i)=>t<=time&&t>=Math.max(0,time-2)?i:-1).filter(i=>i>=0),max=Math.max(1,...keep.flatMap(i=>[Math.abs(replay.i[i]),Math.abs(replay.q[i])]));ctx.strokeStyle='#171717';ctx.beginPath();keep.forEach((i,n)=>{const p=project(replay.i[i]/max,replay.q[i]/max,(sigTs[i]-time)/2,cx,cy,scale);n?ctx.lineTo(...p):ctx.moveTo(...p);});ctx.stroke();if(keep.length){const i=keep.at(-1),p=project(replay.i[i]/max,replay.q[i]/max,(sigTs[i]-time)/2,cx,cy,scale);ctx.fillStyle='#171717';ctx.beginPath();ctx.arc(...p,3,0,Math.PI*2);ctx.fill();}note=`I/Q/time trajectory · one range bin and channel · past 2 s · scale ±${max.toFixed(0)} counts · drag to rotate`;}else{const points=frame?.points||[],max=Math.max(1,...points.flatMap(p=>p.slice(0,3).map(Math.abs)));points.forEach(p=>{const a=project(p[0]/max,p[2]/max,p[1]/max,cx,cy,scale);ctx.fillStyle='#171717';ctx.beginPath();ctx.arc(...a,3,0,Math.PI*2);ctx.fill();});note=`${points.length} firmware detections · scale ${max.toFixed(1)} m · spatial calibration not yet verified`;}}else if(mode==='azimuth'){const points=frame?.points||[],maxR=range.at(-1)||1;points.forEach(p=>{const az=Math.atan2(p[0],p[1])*180/Math.PI,r=Math.hypot(p[0],p[1],p[2]);ctx.fillStyle='#171717';ctx.beginPath();ctx.arc(left+(az+90)/180*width,bottom-r/maxR*height,3,0,Math.PI*2);ctx.fill();});note='Azimuth (°) × range (m) · firmware detections, calibration unverified';}ctx.restore();ctx.fillStyle='#777';ctx.textAlign='center';if(['range-time','phase'].includes(mode)){const v=xWindow();for(let i=0;i<=4;i++)label(left+width*i/4,bottom+17,(v.start+v.span*i/4).toFixed(v.span>20?0:1));label(left+width/2,h-2,'Time (s)');ctx.textAlign='left';label(2,top+10,mode==='phase'?'Phase':'Range');if(mode==='range-time'){label(4,top+24,'0 m');label(4,bottom,range.at(-1).toFixed(1)+' m');}}else if(mode==='range'){for(let i=0;i<=4;i++)label(left+width*i/4,bottom+17,(range.at(-1)*i/4).toFixed(1));label(left+width/2,h-2,'Range (m)');}else if(mode==='doppler'){const velocities=frame?.doppler_velocity_m_s||[];for(let i=0;i<=4;i++)label(left+width*i/4,bottom+17,((velocities[0]||0)+((velocities.at(-1)||0)-(velocities[0]||0))*i/4).toFixed(1));label(left+width/2,h-2,'Radial velocity (m/s)');ctx.textAlign='left';label(2,top+10,'Range');label(2,bottom,range.at(-1).toFixed(1)+' m');}ctx.textAlign='left';$('plotNote').textContent=note;$('plotFrame').textContent=frame?`${frame.time_s.toFixed(2)} s · sample ${frame.index+1}`:'';}
+async function requestFrame(force=false){if(!selected||!replay)return;const index=nearest(actualTimes(),time);if(!force&&(index===frameRequested||performance.now()-frameLastAt<160))return;frameLastAt=performance.now();frameRequested=index;const seq=++frameSeq,take=selected;try{const r=await api(`sessions/${take.session_id}/trials/${take.id}/frame?index=${index}`);if(seq===frameSeq&&take.id===selected?.id){frame=r;drawRadar();}}catch(e){notice(e.message,true);}}
+$('radarPlot').onpointerdown=e=>{if(!['iq3d','points'].includes($('radarView').value))return;orbitDrag={x:e.clientX,y:e.clientY};$('radarPlot').setPointerCapture(e.pointerId);};$('radarPlot').onpointermove=e=>{if(!orbitDrag)return;orbit.yaw+=(e.clientX-orbitDrag.x)*.01;orbit.pitch+=(e.clientY-orbitDrag.y)*.01;orbitDrag={x:e.clientX,y:e.clientY};drawRadar();};$('radarPlot').onpointerup=()=>orbitDrag=null;$('radarPlot').onpointercancel=()=>orbitDrag=null;
+$('radarView').onchange=()=>{drawRadar();requestFrame(true);};
+async function loadReplay(){if(!selected)return;const take=selected,seq=++selectionSeq;const result=await api(`sessions/${take.session_id}/trials/${take.id}/replay?range_bin=${Number($('rangeBin').value)}&antenna=${Number($('antenna').value)||0}`);if(seq!==selectionSeq||selected.id!==take.id)return;replay=result;heatCache=null;const logs=result.range_time.flat().map(v=>Math.log1p(v)).sort((a,b)=>a-b);replay.log_max=logs[Math.floor(logs.length*.98)]||1;for(const option of $('radarView').options){option.disabled=option.value==='doppler'?!result.capabilities.range_doppler:['points','azimuth'].includes(option.value)?!result.capabilities.points:false;}if($('radarView').selectedOptions[0].disabled)$('radarView').value='range-time';$('rangeBin').max=result.shape[1]-1;$('rangeBin').value=result.selected_bin;const a=Number($('antenna').value)||0;$('antenna').innerHTML=Array.from({length:result.shape[2]},(_,i)=>`<option value="${i}">Channel ${i+1}</option>`).join('');$('antenna').value=String(a);$('timeline').setAttribute('aria-valuemax',String(result.duration_s));frameRequested=-1;setTime(time);}
+$('rangeBin').onchange=()=>loadReplay().catch(e=>notice(e.message,true));$('antenna').onchange=()=>loadReplay().catch(e=>notice(e.message,true));
+async function audioWaveform(url,seq){waveform=[];try{const r=await fetch(url),buffer=await r.arrayBuffer(),ctx=new AudioContext(),decoded=await ctx.decodeAudioData(buffer);try{const values=decoded.getChannelData(0),out=[],bins=1500;for(let i=0;i<bins;i++){let max=0;const a=Math.floor(i*values.length/bins),b=Math.floor((i+1)*values.length/bins);for(let j=a;j<b;j++)max=Math.max(max,Math.abs(values[j]));out.push(max);}if(selected?.id===seq){waveform=out;drawTimeline();}}finally{await ctx.close();}}catch(e){if(selected?.id===seq)notice('Audio waveform unavailable: '+e.message,true);}}
+async function openTake(sid,tid){if(busy)throw new Error('Finish the current recording before replay.');await saveIfDirty();pause();const take=await api('sessions/'+sid+'/trials/'+tid);if(!take)throw new Error('Recording not found');selected=take;replay=null;frame=null;time=0;zoom=1;viewStart=0;words=structuredClone(take.words||[]);wordIndex=words.length?0:-1;dirty=false;revision=take.annotation_revision||0;undo=[];waveform=[];showTab('capture');setStage('replay');$('recordingTitle').textContent=take.prompt_text||take.label;$('recordingBadge').textContent=`${take.articulation||'silent'} · ${take.review_status||'legacy'}${take.synthetic?' · SIMULATOR':''}`;$('confirmedText').value=take.confirmed_text||(!take.collection_protocol?take.label:'');if(!words.length&&$('confirmedText').value)words=$('confirmedText').value.trim().split(/\s+/).map(text=>({text,start_s:null,end_s:null,source:'manual'}));$('trimStart').value=take.utterance_start_s||0;$('trimEnd').value=take.utterance_end_s||take.duration_s;$('reviewNotes').value=take.notes||'';$('reviewState').textContent=take.review_status||'Legacy recording';$('continueScript').hidden=!sessions.find(s=>s.id===sid)?.collection;renderUnplaced();updateWordLabel();await loadReplay();const session=sessions.find(s=>s.id===sid),conditions=take.capture_conditions||session?.collection||{};const info={Person:session?.subject||'Unknown',Distance:conditions.distance_cm?conditions.distance_cm+' cm':'Unknown',Location:conditions.location||'Unknown',Enclosure:conditions.enclosure||'Unknown',Mount:conditions.mount||'Unknown',Orientation:`Yaw ${conditions.yaw_deg??'?'}° · pitch ${conditions.pitch_deg??'?'}° · roll ${conditions.roll_deg??'?'}°`,Firmware:session?.device_info?.sdk_version||'Not recorded',Profile:session?.profile?.sha256||'Unknown',Quality:`${take.frames} samples · ${take.frame_gaps} missing · ${take.measured_hz.toFixed(1)} samples/s`,Timing:take.timing_note||'Host-clock estimates',Script:take.script_sha256||session?.collection?.plan.deck_name||'Legacy'};$('recordingDetails').innerHTML=Object.entries(info).map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('');const first=Number(replay.first_timestamp_ns),audioHost=take.media?.native_audio_timing?.first_sample_host_ns??take.media?.browser_start_server_ns;audioOffset=take.audio_offset_s??(audioHost?(Number(audioHost)-first)/1e9:0);$('audioOffset').value=audioOffset.toFixed(4);$('suggestWords').disabled=!native||!take.media||take.articulation==='silent';audio.pause();audio.removeAttribute('src');audio.load();if(take.media){const url=`/api/sessions/${sid}/trials/${tid}/media`;audio.src=url;audio.load();audioWaveform(url,take.id);}$('timelineNote').textContent=take.media?'Audio + text · shared radar time · host alignment estimate':'Text + radar · no reference audio';renderLibrary();drawTimeline();}
+act('detailsButton',()=>{$('recordingDetails').hidden=!$('recordingDetails').hidden;$('detailsButton').setAttribute('aria-expanded',String(!$('recordingDetails').hidden));});
+async function applyAlignment(incoming,timebase='radar',source='alignment_import'){if(!selected||!replay)return;const converted=incoming.map(w=>({text:String(w.text??w.word??''),start_s:Number(w.start_s??w.start)+(timebase==='audio'?audioOffset:0),end_s:Number(w.end_s??w.end)+(timebase==='audio'?audioOffset:0),source}));if(converted.some(w=>!w.text||!Number.isFinite(w.start_s)||!Number.isFinite(w.end_s)||w.start_s<0||w.end_s>replay.duration_s||w.end_s<=w.start_s))throw new Error('Some word times lie outside the radar recording. Check the audio offset and alignment.');validWords(converted);const existing=$('confirmedText').value.trim().split(/\s+/).filter(Boolean),normalize=s=>s.toLowerCase().replace(/[^\p{L}\p{N}']/gu,'');if(existing.length){if(existing.length!==converted.length||existing.some((w,i)=>normalize(w)!==normalize(converted[i].text)))throw new Error('The alignment text differs from your reviewed text. Correct the transcript or import an alignment made from that exact text.');converted.forEach((w,i)=>w.text=existing[i]);}pushUndo();words=converted;$('confirmedText').value=words.map(w=>w.text).join(' ');wordIndex=words.length?0:-1;changed();renderUnplaced();updateWordLabel();}
+$('alignmentFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>2*1024**2)throw new Error('Use an alignment JSON under 2 MiB.');const data=JSON.parse(await f.text());let list=data.words||data;if(data.tiers?.words?.entries)list=data.tiers.words.entries.map(([start,end,text])=>({text,start,end}));if(!Array.isArray(list))throw new Error('Expected words with text, start_s and end_s.');await applyAlignment(list,data.timebase||(data.tiers?'audio':'radar'),data.tiers||data.source==='forced_alignment'?'forced_alignment':'alignment_import');notice('Imported word intervals are pending review.');}catch(e){notice(e.message,true);}};
+act('suggestWords',async()=>{if(!selected?.media)return;const take=selected;$('suggestWords').disabled=true;try{const result=await bridge('speechAlign',{sid:take.session_id,tid:take.id});if(selected?.id!==take.id)return;selected.asr_raw_text=result.text;changed();await applyAlignment(result.words,'audio','speech_estimate');notice('Speech word estimates added. Correct the text and boundaries before verifying.');}finally{$('suggestWords').disabled=!native||!selected?.media||selected.articulation==='silent';}});
+act('enableShortcut',async()=>{const r=await bridge('enableShortcut',{keyCode:Number($('hotkey').value)});$('hotkeyHelp').textContent=r.message;});$('hotkey').onchange=()=>native&&bridge('setShortcut',{keyCode:Number($('hotkey').value)}).catch(e=>notice(e.message,true));
+let polling=false;async function poll(){if(polling)return;polling=true;try{state=await api('live');$('connectionStatus').textContent=state.synthetic?'Simulator':state.status==='connected'?'Radar connected':state.status==='error'?'Source error':'Not connected';$('sourceQuality').textContent=`${state.frames||0} frames · ${state.frame_gaps||0} missing`;$('liveRate').textContent=`${(state.measured_hz||0).toFixed(1)} samples/s`;if(state.error)notice(state.error,true);if(stage==='record')drawLive();}catch(e){notice(e.message,true);}finally{polling=false;}}
+document.addEventListener('keydown',e=>{const editable=e.target.closest('input,textarea,select,[contenteditable=true]');if(editable)return;if(e.key==='Escape'&&activeRecord){api('record/'+activeRecord.id+'/cancel','POST').catch(()=>{});return;}if(dictation||tab!=='capture'||$('settingsDialog').open)return;if(e.code==='Space'){e.preventDefault();if(e.repeat)return;if(stage==='replay')play().catch(e=>notice(e.message,true));else if(stage==='record'){if(activeSession?.collection?.plan.task==='reading')toggleRecording().catch(e=>notice(e.message,true));else beginHold();}}if(stage==='replay'&&replay){if(e.key==='['){e.preventDefault();setEdge('start_s');}if(e.key===']'){e.preventDefault();setEdge('end_s');}if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();pause();const ts=actualTimes(),dir=e.key==='ArrowLeft'?-1:1;setTime(e.shiftKey?time+dir*.1:ts[Math.max(0,Math.min(ts.length-1,nearest(ts,time)+dir))]);}if((e.metaKey||e.ctrlKey)&&e.key==='z'&&undo.length){e.preventDefault();words=JSON.parse(undo.pop());$('confirmedText').value=words.map(w=>w.text).join(' ');changed();renderUnplaced();updateWordLabel();}}});
+document.addEventListener('keyup',e=>{if(e.code==='Space'&&hold){e.preventDefault();hold=false;finishTake().catch(e=>notice(e.message,true));}});
+async function loadTraining(){await refreshLibrary();$('trainBlocks').innerHTML=sessions.filter(s=>s.collection&&!s.collection.plan.calibration&&s.collection.plan.task!=='reading').map(s=>`<label>${esc(s.name)} · ${s.accepted_count} reviewed${s.synthetic?' · SIM':''}<select data-split="${s.id}"><option value="">Exclude block</option>${!['validation','test'].includes(s.collection.visit_role)?'<option value="fit">Use for fitting</option>':''}<option value="test">Hold out for evaluation</option></select></label>`).join('')||'<p class="subtle">No eligible phrase recording blocks yet. Reader passages are retained for future sequence models.</p>';const reports=await api('models');$('modelReports').innerHTML=reports.map(r=>`<div class="report"><h3>${esc(r.articulation||'legacy')} phrase baseline${r.synthetic?' · SIM':''}</h3><p>${(r.accuracy*100).toFixed(1)}% accuracy · F1 ${r.macro_f1.toFixed(3)}</p><p class="subtle">${r.train_examples} training · ${r.test_examples} held out · ${r.labels.length} labels<br>${esc(r.id)}</p></div>`).join('')||'<p class="subtle">No models yet.</p>';}
+act('trainButton',async()=>{const rows=[...document.querySelectorAll('[data-split]')],chosen=rows.filter(e=>e.value),held=chosen.filter(e=>e.value==='test').map(e=>e.dataset.split);if(!held.length||chosen.length<=held.length)throw new Error('Choose a fitting block and a separate held-out block.');$('trainButton').disabled=true;try{const j=await api('train','POST',{session_ids:chosen.map(e=>e.dataset.split),test_session_ids:held,range_min_m:Number($('rangeMin').value),range_max_m:Number($('rangeMax').value),articulation:$('trainMode').value});while(true){const r=await api('jobs/'+j.id);$('trainState').textContent=r.status;if(r.status==='failed')throw new Error(r.error);if(r.status==='complete')break;await sleep(300);}await loadTraining();}finally{$('trainButton').disabled=false;}});
+async function init(){[decks,profiles]=await Promise.all([api('decks'),api('profiles')]);$('deck').innerHTML=decks.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')+'<option value="custom-words">My words & short phrases</option><option value="reader">Reader · paste a book or script</option>';let conditions={};try{conditions=JSON.parse(localStorage.getItem('gasp.conditions')||'{}');}catch{}conditionIds.forEach(id=>{if(conditions[id]!==undefined)$(id).value=conditions[id];});deckChanged();sourceChanged();await refreshLibrary();await poll();if(!native){$('enableShortcut').disabled=true;$('hotkeyHelp').textContent='Global shortcut and on-device speech tools are available in the installed app.';}else{const r=await bridge('info');$('hotkey').value=String(r.keyCode);$('hotkeyHelp').textContent=r.shortcutMessage;}setInterval(poll,700);setInterval(readerTick,100);new ResizeObserver(()=>{drawRadar();drawTimeline();if(stage==='record')drawLive();}).observe($('captureLayout'));}
+init().catch(e=>notice(e.message,true));

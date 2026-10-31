@@ -10,6 +10,16 @@ def test_profiles_fit_transport():
     assert bundled_profile('dca-raw').lvds_adc
 
 
+def test_transport_profiles_share_the_verified_rf_schedule():
+    profiles = [bundled_profile(name) for name in ('usb-phase-10hz', 'usb-phase-20hz', 'dca-raw')]
+    for p in profiles:
+        # The former 47 us schedule was accepted by the CLI but failed at sensorStart.
+        # Keep USB and raw-ADC timing metadata consistent with the board-tested schedule.
+        assert p.chirp_period_us == 83
+        assert p.summary()['burst_duration_ms'] == pytest.approx(3.984)
+    assert len({p.range_step_m for p in profiles}) == 1
+
+
 @pytest.mark.parametrize('old,new',[
     ('clutterRemoval -1 0','clutterRemoval -1 1'),
     ('profileCfg 0 60.25','profileCfg 0 63.5'),

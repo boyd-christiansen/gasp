@@ -67,6 +67,8 @@ def train(store, session_ids, test_session_ids, spec=None, articulation=None):
     if len(provenance) != 1:
         raise ValueError("Use the same subject, source and radar profile; never mix simulator and hardware data")
     for session in sessions:
+        if session.get("collection", {}).get("plan", {}).get("task") == "reading":
+            raise ValueError("Reader passages are sequence data; use phrase blocks for the phrase baseline")
         role = session.get("collection", {}).get("visit_role")
         if role == "calibration" and session["id"] in test_session_ids:
             raise ValueError("Calibration visits cannot be held-out evaluation data")

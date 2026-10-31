@@ -35,7 +35,7 @@ def test_adc_layout_and_timestamps_and_loss(tmp_path):
     z,stamps,q=decode_adc(path,p)
     assert z.shape==(2*p.loops,64,12) and np.argmax(abs(z[0,:,0]))==8
     assert np.all(np.diff(stamps)>0)
-    assert stamps[p.loops]==20_000_000 and stamps[1]==141000
+    assert stamps[p.loops]==20_000_000 and stamps[1]==249000
     frame_bytes=len(wire.tobytes())//2
     z,stamps,q=decode_adc(path,p,[[10,20]])
     assert q['dropped_frames']==1 and z.shape[0]==p.loops and stamps[0]==20_000_000

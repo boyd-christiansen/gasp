@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Hardware bring-up](HARDWARE.md)
 
-Choose a capture path and enclosure below. These are unprinted CAD prototypes: physical connector fit, cable bending, stability, thermal performance, and RF behavior still need validation. Print a fit coupon before the large parts, and print individual part files rather than display assemblies.
+Choose a capture path and enclosure below. These are prototypes; current revisions still need physical connector, cable, strength, thermal and RF validation. Print a fit coupon before the large parts, and print individual part files rather than display assemblies.
 
 ## Capture options
 
@@ -41,7 +41,8 @@ The smaller **IWR6843AOPEVM v1.2** enclosure is for standalone USB capture. It h
 The new **drop-in desktop dock** holds either front at a fixed 20° upward aim. It uses a smooth locating pin and heel cradle, needs no additional metal hardware, and has a USB cable groove. The enclosure rests under gravity and lifts out along the pin axis; it has no latch or threaded lock.
 
 - [Enclosure v1.2 assembly and printing](../enclosure/iwr6843aop/README_v1_2.md), [hardware list](../enclosure/iwr6843aop/HARDWARE_v1_2.md), and [enclosure print files](../enclosure/iwr6843aop/exports_v1_2)
+- [Reinforced rear shell v1.3](../enclosure/iwr6843aop/README_v1_3.md) and [replacement print files](../enclosure/iwr6843aop/exports_v1_3): wider, tapered PCB supports and a sloped roof over the mount opening, following feedback from the v1.2 print. Reuse the front, retainer, washers, hardware and dock. This revision is not yet print-tested.
 - [Desktop dock guide](../enclosure/iwr6843aop/DESKTOP_STAND.md), [dock print files](../enclosure/iwr6843aop/exports_dock), and [dock manifest](../enclosure/iwr6843aop/DESKTOP_STAND_MANIFEST.json)
 - [Parametric source](../enclosure/iwr6843aop/src) and [fit/mesh reports](../enclosure/iwr6843aop/checks)
 
-The dock footprint is 100 × 120 mm. Print the optional cradle-fit sample first and check the actual nut, rear retainer, and cable. The original [v1.1 enclosure guide](../enclosure/iwr6843aop/README.md) and exports remain available for reference; use the v1.2 files for the current build.
+The dock footprint is 100 × 120 mm. Print the optional cradle-fit sample first and check the actual nut, rear retainer, and cable. The original [v1.1 enclosure guide](../enclosure/iwr6843aop/README.md) and exports remain available for reference. Use the v1.2 assembly with the v1.3 replacement rear shell for the latest prototype.

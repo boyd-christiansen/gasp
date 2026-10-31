@@ -20,6 +20,8 @@ from .storage import Store, atomic_json, checked_id
 from . import training
 from .collection import DECKS, make_plan
 from .transport import ports
+from .replay import Replay
+from . import __version__
 
 STATIC = Path(__file__).parent / "static"
 
@@ -44,18 +46,30 @@ class CollectionInput(BaseModel):
     calibration_id: str | None = None
     distance_cm: float = Field(default=45, ge=10, le=200)
     position_notes: str = Field(default="", max_length=2000)
+    location: str = Field(default="", max_length=120)
+    enclosure: str = Field(default="", max_length=120)
+    mount: str = Field(default="", max_length=120)
+    yaw_deg: float | None = Field(default=None, ge=-180, le=180)
+    pitch_deg: float | None = Field(default=None, ge=-180, le=180)
+    roll_deg: float | None = Field(default=None, ge=-180, le=180)
+    script_text: str | None = Field(default=None, max_length=200000)
+    words_per_minute: int = Field(default=130, ge=50, le=300)
 
 
 class CollectionRecord(BaseModel):
     reference_expected: bool = False
     step_id: str
-    duration_s: float | None = Field(default=None, ge=.5, le=25)
+    duration_s: float | None = Field(default=None, ge=.5, le=180)
+    capture_method: str = Field(default="button", pattern="^(button|hold|reader|shortcut)$")
+    reader_follow: str | None = Field(default=None, pattern="^(paced|manual|voice)$")
+    reader_wpm: int | None = Field(default=None, ge=50, le=300)
 
 
 class CaptureEvent(BaseModel):
-    name: str = Field(pattern="^(cue_shown|speech_start|speech_end)$")
+    name: str = Field(pattern="^(cue_shown|speech_start|speech_end|key_down|key_up|reader_marker)$")
     estimated_server_ns: int = Field(gt=0)
     uncertainty_ms: float = Field(ge=0, le=60000)
+    word_index: int | None = Field(default=None, ge=0, le=100000)
 
 
 class SessionInput(BaseModel):
@@ -72,13 +86,24 @@ class TrialInput(BaseModel):
     notes: str = Field(default="", max_length=4000)
 
 
+class WordAnnotation(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+    start_s: float | None = Field(default=None, ge=0)
+    end_s: float | None = Field(default=None, gt=0)
+    source: str = Field(default="manual", pattern="^(manual|speech_estimate|forced_alignment|alignment_import)$")
+
+
 class TrialUpdate(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=200)
     accepted: bool | None = None
     notes: str | None = Field(default=None, max_length=4000)
-    confirmed_text: str | None = Field(default=None, max_length=200)
+    confirmed_text: str | None = Field(default=None, max_length=20000)
     utterance_start_s: float | None = Field(default=None, ge=0)
     utterance_end_s: float | None = Field(default=None, gt=0)
+    words: list[WordAnnotation] | None = Field(default=None, max_length=3000)
+    audio_offset_s: float | None = Field(default=None, ge=-600, le=600)
+    base_revision: int | None = Field(default=None, ge=0)
+    asr_raw_text: str | None = Field(default=None, max_length=20000)
 
 
 class TrainInput(BaseModel):
@@ -105,6 +130,7 @@ class PredictTrialInput(BaseModel):
 def create_app(data_root=None, research_enabled=False, app_token=None):
     store = Store(data_root or os.environ.get("GASP_DATA", "data"))
     engine = Engine(store)
+    replay = Replay(store)
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="baseline-training")
 
     @asynccontextmanager
@@ -167,7 +193,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.2.1", "data_root": str(store.root),
+        return {"ok": True, "version": __version__, "data_root": str(store.root),
                 "hardware_verified": False, "transcription_enabled": False, "research_predictions_enabled": research_enabled, "server_monotonic_ns": time.monotonic_ns()}
 
     @app.get("/api/clock")
@@ -180,7 +206,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.get("/api/profiles")
     def profiles():
-        return [dict(name=n, **bundled_profile(n).summary()) for n in ("usb-phase-20hz", "usb-phase-10hz", "dca-raw")]
+        return [dict(name=n, **bundled_profile(n).summary()) for n in ("usb-phase-20hz", "usb-phase-10hz", "usb-doppler-10hz", "usb-spatial-2hz", "dca-raw")]
 
     @app.post("/api/connect")
     def connect(body: Connect):
@@ -207,12 +233,31 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     def sessions():
         return store.sessions()
 
+    @app.get("/api/blocks")
+    def blocks():
+        # Reader documents can be large. The library needs summaries, not every script word.
+        result = store.sessions()
+        for session in result:
+            if session.get("collection"):
+                plan = session["collection"]["plan"]
+                session["collection"] = {k:v for k,v in session["collection"].items() if k != "script_text"}
+                session["collection"]["plan"] = {k:v for k,v in plan.items() if k not in {"script_text", "steps"}}
+        return result
+
     @app.post("/api/sessions")
     def new_session(body: SessionInput):
         collection = None
         if body.collection:
             c = body.collection
-            plan = make_plan(c.deck_id, c.mode, c.repetitions)
+            plan = make_plan(c.deck_id, c.mode, c.repetitions, script_text=c.script_text, words_per_minute=c.words_per_minute)
+            if engine.profile and engine.profile.lvds_adc and c.deck_id == "reader":
+                # Raw captures are bounded to 25 s. Split text to fit, rather than silently clipping it.
+                word_limit = max(10, int(c.words_per_minute * 18 / 60))
+                text_words = (c.script_text or "").split()
+                short_text = "\n\n".join(" ".join(text_words[i:i+word_limit]) for i in range(0,len(text_words),word_limit))
+                plan = make_plan(c.deck_id, c.mode, c.repetitions, script_text=short_text, words_per_minute=c.words_per_minute)
+                for step in plan["steps"]:
+                    step["duration_s"] = 25
             if plan["calibration"] and c.visit_role != "calibration":
                 raise ValueError("Calibration decks must use the calibration role")
             if c.calibration_id:
@@ -251,12 +296,24 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
                 raise ValueError("Create a collection session first")
             step, extra = store.collection_record(engine.session["id"], body.step_id)
             extra["reference_expected"] = body.reference_expected
+            extra.update(capture_method=body.capture_method, reader_follow=body.reader_follow, reader_wpm=body.reader_wpm)
             return engine.record(step["target_text"], body.duration_s or step["duration_s"], step["articulation"], "", extra)
 
     @app.get("/api/sessions/{sid}/trials")
     def trials(sid: str):
         store.session(sid)
         return store.trials(sid)
+
+    @app.get("/api/recordings")
+    def recording_library():
+        keys = {"id","session_id","prompt_text","label","articulation","review_status","created_ns",
+                "synthetic","duration_s","frames","accepted","capture_conditions"}
+        return sorted([dict({k:v for k,v in t.items() if k in keys}, session_name=s["name"], subject=s["subject"], profile_sha256=s["profile"]["sha256"])
+                       for s in store.sessions() for t in store.trials(s["id"])], key=lambda t:t["created_ns"], reverse=True)
+
+    @app.get("/api/sessions/{sid}/trials/{tid}")
+    def get_trial(sid: str, tid: str):
+        return json.loads((store.trial_dir(sid,tid)/"trial.json").read_text())
 
     @app.post("/api/record")
     def record(body: TrialInput):
@@ -296,6 +353,14 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         return {"time_s": ((t-t[0])/1e9).tolist(), "phase": (phase-phase[0]).tolist(),
                 "range_magnitude": np.abs(z).mean(axis=(0, 2)).tolist(), "shape": list(z.shape)}
 
+    @app.get("/api/sessions/{sid}/trials/{tid}/replay")
+    def trial_replay(sid: str, tid: str, range_bin: int = 8, antenna: int = 0):
+        return replay.preview(sid,tid,range_bin,antenna)
+
+    @app.get("/api/sessions/{sid}/trials/{tid}/frame")
+    def trial_frame(sid: str, tid: str, index: int = 0):
+        return replay.frame(sid,tid,index)
+
     @app.get("/api/sessions/{sid}/trials/{tid}/download")
     def download(sid: str, tid: str):
         return FileResponse(store.trial_dir(sid, tid)/"radar.npz", filename=f"{tid}-radar.npz")
@@ -330,8 +395,8 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
             with tmp.open("xb") as f:
                 async for chunk in request.stream():
                     count += len(chunk)
-                    if count > 64*1024*1024:
-                        raise ValueError("Reference media exceeds 64 MiB")
+                    if count > 256*1024*1024:
+                        raise ValueError("Reference media exceeds 256 MiB")
                     f.write(chunk)
                     digest.update(chunk)
             os.replace(tmp, target)

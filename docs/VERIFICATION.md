@@ -1,6 +1,6 @@
-# Local verification — 2026-10-30
+# Local verification
 
-The software is ready for a first physical-board bring-up. All evidence below uses synthetic signals, protocol fixtures or emulated serial devices; it does not establish real silent-speech recognition.
+USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
 ## Automated checks
 
@@ -86,3 +86,33 @@ The installed app now has Radar data (Capture, Recordings, Training, Setup) and 
 All 29 regression tests passed. An isolated browser walkthrough connected the simulator, created a calibration visit, recorded and finished a take, opened Recordings, confirmed its label, verified it, and observed the script advance. Training and both Dictation tabs were exercised. The rebuilt standalone worker passed capture/review/reserved-holdout/CPU-training checks on synthetic data, and the complete Mac bundle passed signature verification.
 
 The final app was installed and opened, and its executable and frontend assets matched the final build. Native navigation, shortcut settings, and the dictation recording guard were checked. The five existing recording files matched their pre-install hashes; no user recordings were added or changed. Reference microphone capture, permission-granted global shortcuts, and physical radar/speech behavior remain unverified. The documentation screenshot uses an isolated simulator fixture.
+
+## Physical USB bring-up · 2026-10-31
+
+Tested a physical **IWR6843AOPEVM Rev G**, ES2 AOP, with **mmWave SDK 03.06.02.00** and RF firmware **06.03.02.06.20.08.11**. The onboard CP2105 bridge exposes separate CLI and data ports on the Mac. CLI `version` identified `xWR68xx_AOP`; binary frames identified platform `0xA6843` and version `0x03060200`. No firmware was flashed.
+
+The initial cable was in auxiliary-power connector J5. Moving the data-capable cable to J1 exposed both serial ports. Underside S3 was 0/OFF for functional boot. The CLI accepted the original profile's commands but rejected `sensorStart`. Using the 43 µs idle time from TI's AOP reference timing resolved startup; the original RF parameters with only that idle change also streamed successfully. The profiles now use an 83 µs chirp period, Doppler limits of ±4.8 m/s, and explicit `calibData 0 0 0` (no flash save/restore).
+
+| Profile | Capture window | Frames | Observed host rate | Missing frames | Malformed packets |
+| --- | --- | --- | --- | --- | --- |
+| USB phase 20 Hz | 20 seconds | 402 | 20.004 fps | 0 | 0 |
+| USB phase 10 Hz, after stop/restart | 5 seconds | 51 | 9.955 fps | 0 | 0 |
+
+Both captures had zero discarded bytes and no reader errors. Every frame contained AOP complex TLV 8 (**64 range bins × 12 virtual channels**), range-profile TLV 2, statistics TLV 6 and temperature TLV 9. Complex samples were finite and nonzero. Captures and diagnostic logs remain local under ignored `test-data/hardware-bringup-2026-10-31/`; they are not labelled speech examples or approved training takes.
+
+All **30 regression tests** passed, including the revised raw-ADC timestamp fixture (249 µs between TDM loops). The rebuilt standalone bundle passed isolated synthetic capture, review and reserved-holdout CPU training. Its signature verified, and the installed profiles matched both the source and the configurations exercised above. The five existing recording files retained their checksums.
+
+The installed app was connected through its own Setup controls to the physical board. At 20 Hz its live view showed one missing frame during initial observation. It was then stopped and reconnected at **10 Hz**, where the live view showed **173 frames, zero missing, and 10.0 samples/s**. The app was left connected with no active recording or selected simulator visit. A new real calibration visit requires the participant's measured placement and performed prompts.
+
+The DCA profile shares the corrected RF timing, so its recorded burst duration is now **3.984 ms**. Physical DCA/FPGA/Ethernet operation and lane ordering remain untested. Face targeting, inter-frame phase quality, reproducible articulation signals, microphone synchronization and speech-model accuracy require separate experiments.
+
+## Collection workspace · 0.3.0 · 2026-10-31
+
+- Full regression suite at the checkpoint: **36 passed** (25.31 s), including complete-versus-incomplete DCA Doppler burst checks. One upstream Starlette/AnyIO deprecation warning remains. JavaScript syntax, frozen dependency lock, native Swift compilation and recording-gesture checks passed.
+- Rebuilt the standalone Mac bundle with the Speech framework and verified its ad-hoc signature. The frozen worker passed isolated simulator launch, scripts, capture, review, reserved holdout and CPU baseline training. Installed version 0.3.0 / build 3. All five pre-existing recording files were byte-identical after reinstall.
+- Browser interaction checks exercised the real collection UI: created a two-passage Reader block, started/finished its first passage, saw pending review and the next passage; held Space for a custom word, released and saw the next prompt; opened saved audio/radar data, dragged a word edge from 2.20 to 1.95 s, clicked the next word to seek, and verified the annotation revision. Fixtures and synthetic reference tones stayed in ignored `test-data/collection-studio-qa`, outside the installed user dataset.
+- Physically streamed the new `usb-doppler-10hz` profile for 61 packets with no gaps or parser errors and `usb-spatial-2hz` for 13 packets with no gaps/errors. Both included a complete 64×16 range–Doppler TLV. A separate saved-take check retained 30 Doppler frames and 10 spatial frames with zero gaps, then replayed their matrices through the API and UI. Firmware identity was retained as SDK 03.06.02.00 / xWR68xx_AOP. The spatial scene returned zero detections; the UI reported zero rather than synthesizing a point cloud.
+- Opened the installed app, confirmed Capture/Training and the historical recording library, selected the actual CLI/data ports and new phase + range–Doppler profile, and observed Radar connected. Microphone and Input Monitoring remained disabled.
+- Native on-device speech following and annotation suggestions compile and are bundled. Real microphone permission, voice-follow accuracy, ASR word timing, and audio/radar offset validation remain interactive checks. Recognition requires an available local language model; no network fallback is enabled. Forced-alignment JSON import is implemented, but no aligner/model is bundled. Physical DCA capture remains unverified; Doppler reconstruction is covered by synthetic complete/incomplete burst tests.
+
+The collection UI supports resumable bounded passages, not uninterrupted whole-book recording. No human speech dataset or speech-accuracy result was produced by these checks.

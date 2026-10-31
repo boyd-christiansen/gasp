@@ -62,10 +62,16 @@ class SerialSource:
         self.parser = Parser()
         self.stop = threading.Event()
         self.thread = None
+        self.device_info = {}
 
     def start(self):
         from .profile import commands
         try:
+            version = self.cli.command("version")
+            for line in version.splitlines():
+                for label, key in (("Platform", "platform"), ("mmWave SDK Version", "sdk_version"), ("Device Info", "device"), ("RF F/W Version", "rf_firmware")):
+                    if line.split(":", 1)[0].strip() == label:
+                        self.device_info[key] = line.split(":", 1)[1].strip()
             for line in commands(self.profile.text):
                 if line != "sensorStart":
                     self.cli.command(line)

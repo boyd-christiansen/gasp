@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import AVFoundation
+import Speech
 import SwiftUI
 
 final class AudioReference {
@@ -16,11 +17,12 @@ final class AudioReference {
     private var writeError: String?
     private var sampleRate: Double = 0
     private var channels: UInt32 = 0
+    private var speechRequest: SFSpeechAudioBufferRecognitionRequest?
     private(set) var stopped = true
 
-    func start() throws {
+    func start(speech: SFSpeechAudioBufferRecognitionRequest? = nil) throws {
         guard stopped, location == nil else { throw failure("Finish the previous audio reference first.") }
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Radar data → Setup.") }
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Settings.") }
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw failure("No microphone input is available.") }
@@ -31,7 +33,7 @@ final class AudioReference {
         let output = try AVAudioFile(forWriting:url, settings:settings, commonFormat:.pcmFormatFloat32, interleaved:false)
         lock.lock()
         file = output; location = url; firstHost = nil; firstSample = nil; expectedSample = nil
-        frames = 0; discontinuities = 0; writeError = nil; sampleRate = format.sampleRate; channels = format.channelCount
+        frames = 0; discontinuities = 0; writeError = nil; sampleRate = format.sampleRate; channels = format.channelCount; speechRequest = speech
         lock.unlock()
         input.installTap(onBus:0, bufferSize:1024, format:format) { [weak self] buffer, when in
             guard let self else { return }
@@ -45,6 +47,7 @@ final class AudioReference {
                 if let expected = self.expectedSample, when.sampleTime != expected { self.discontinuities += 1 }
                 self.expectedSample = when.sampleTime + Int64(buffer.frameLength)
             }
+            self.speechRequest?.append(buffer)
             do { try f.write(from:buffer); self.frames += Int64(buffer.frameLength) }
             catch { self.writeError = error.localizedDescription }
         }
@@ -54,7 +57,8 @@ final class AudioReference {
     func stop() {
         guard !stopped else { return }
         engine.stop(); engine.inputNode.removeTap(onBus:0)
-        lock.lock(); file = nil; stopped = true; lock.unlock()
+        lock.lock(); file = nil; stopped = true; let request = speechRequest; speechRequest = nil; lock.unlock()
+        request?.endAudio()
     }
     func reference() throws -> (URL, [String:Any]) {
         stop()
@@ -99,6 +103,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     let overlayState = OverlayState()
     var panel: NSPanel!
     let audio = AudioReference()
+    let speech = SpeechReference()
     var worker: Process?
     var workerLog: FileHandle?
     var readyFile: URL!
@@ -210,7 +215,28 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 case "audioPermission":
                     let allowed = await AVCaptureDevice.requestAccess(for:.audio)
                     if !allowed { throw failure("Allow Gasp in System Settings → Privacy & Security → Microphone.") }
-                case "audioStart": try audio.start()
+                case "speechPermission": try await speech.permission()
+                case "audioStart":
+                    if body["followSpeech"] as? Bool == true {
+                        try await speech.permission()
+                        let request = try speech.live { [weak self] payload in
+                            guard let data = try? JSONSerialization.data(withJSONObject:payload),let json = String(data:data,encoding:.utf8) else { return }
+                            self?.web.evaluateJavaScript("window.nativeSpeech(\(json))",completionHandler:nil)
+                        }
+                        do { try audio.start(speech:request) } catch { speech.cancel(); throw error }
+                    } else { try audio.start() }
+                case "speechAlign":
+                    guard let sid = body["sid"] as? String,let tid = body["tid"] as? String,
+                          sid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil,
+                          tid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil else { throw failure("Invalid recording identifier.") }
+                    var request = URLRequest(url:URL(string:"/api/sessions/\(sid)/trials/\(tid)/media",relativeTo:base)!.absoluteURL)
+                    request.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization")
+                    let (download,response) = try await URLSession.shared.download(for:request)
+                    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw failure("Reference audio is unavailable.") }
+                    let local = FileManager.default.temporaryDirectory.appendingPathComponent("gasp-speech-\(UUID().uuidString).wav")
+                    try FileManager.default.moveItem(at:download,to:local)
+                    defer { try? FileManager.default.removeItem(at:local) }
+                    result = try await speech.align(url:local)
                 case "audioStop": audio.stop()
                 case "audioDiscard": audio.discard()
                 case "audioAttach":
@@ -279,7 +305,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool { false }
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
         if quitting { return .terminateNow }
-        quitting = true; startupTimer?.invalidate(); audio.discard()
+        quitting = true; startupTimer?.invalidate(); audio.discard(); speech.cancel()
         if let tap = eventTap { CGEvent.tapEnable(tap:tap,enable:false) }
         guard let process = worker,process.isRunning else { return .terminateNow }
         process.interrupt()

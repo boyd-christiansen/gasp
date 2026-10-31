@@ -18,8 +18,8 @@ cp macos/Info.plist "$app/Contents/Info.plist"
 rm -rf "$app/Contents/Resources/capture"
 ditto build/macos/worker/gasp-capture "$app/Contents/Resources/capture"
 swiftc -swift-version 5 -O -module-cache-path "$SWIFT_MODULECACHE_PATH" \
-  -framework AppKit -framework WebKit -framework AVFoundation -framework SwiftUI \
-  macos/Sources/RecordingGesture.swift macos/Sources/main.swift -o "$app/Contents/MacOS/Gasp"
+  -framework AppKit -framework WebKit -framework AVFoundation -framework SwiftUI -framework Speech \
+  macos/Sources/RecordingGesture.swift macos/Sources/SpeechReference.swift macos/Sources/main.swift -o "$app/Contents/MacOS/Gasp"
 .venv/bin/python scripts/collect-app-licenses.py "$app/Contents/Resources/ThirdPartyLicenses"
 codesign --force --deep --sign - "$app"
 print "Built $app"
