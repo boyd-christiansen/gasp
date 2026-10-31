@@ -21,7 +21,7 @@ Firmware flashing is separate from serial runtime configuration. TI's R4/DSP com
 
 Use this if you need the full time-resolved ADC stream rather than a frame's zero-Doppler summary. The supported stack uses DCA1000EVM and MMWAVEICBOOST. Depending on EVM revision, the carrier is needed for the LVDS connector and routing.
 
-### Capture in the workbench
+### Capture in Training Studio
 
 The source selector now supports **DCA1000 · raw ADC over Ethernet**. Disconnect the current source before switching; create a fresh session after switching. DCA and USB recordings use different source/profile identities, and cannot be pooled in one model.
 
@@ -29,15 +29,15 @@ The source selector now supports **DCA1000 · raw ADC over Ethernet**. Disconnec
 2. Configure the Mac Ethernet adapter manually, normally `192.168.33.30/24`. The DCA defaults to `192.168.33.180`. Enter the actual addresses in the app. UDP command/data ports are 4096/4098. The app binds both ports before reconfiguring the radar, so an unavailable adapter/address or occupied port fails early. macOS may request local-network permission.
 3. Select the **DCA raw ADC** profile and the radar **command** serial port. No binary USB data port is needed. Select the supported **two-lane complex16 ADC decoder**. This is an explicit format selection, not evidence that the physical lane mapping has already been validated.
 4. Click **Connect source**. The app configures the radar, checks DCA acknowledgements/version, and arms the connection. Raw streaming remains off between takes.
-5. Create a session, choose the phrase deck, and click **Record next trial**. After the countdown the app starts the DCA/radar and waits for data. **Wait for RECORDING before mouthing the phrase.** The requested duration begins after packets are observed. Raw capture starts earlier and stops later; those host timing markers are retained in the manifest. Media synchronization remains approximate.
-6. On completion, the app stops the radar/DCA, drains pending UDP packets, retains `adc.bin`, `manifest.json` and `radar.cfg`, then imports range FFTs for every complete, loss-free ADC frame. Range/phase plots show the last completed take. Review, relabel, exclude, and train on the imported trials as usual. Review also offers raw ADC, manifest and configuration downloads.
-7. **Cancel DCA capture** stops the hardware and retains partial raw files without adding a training trial. A transport/stop failure reports an error and requires disconnect/reconnect. Closing the server requests cancellation before releasing the connection.
+5. Create a visit, choose the phrase deck, and click **Record this take**. The app starts the DCA/radar and waits for data. **Wait for the readiness sound and Recording indicator before mouthing the phrase.** The requested duration begins after packets are observed. Raw capture starts earlier and stops later; those host timing markers are retained in the manifest. Media synchronization remains approximate.
+6. On completion, the app stops the radar/DCA, drains pending UDP packets, retains `adc.bin`, `manifest.json` and `radar.cfg`, then imports range FFTs for every complete, loss-free ADC frame. Range/phase plots show the last completed take. Review the signal and confirmed text, then **Verify & keep** or reject it. Newly captured takes are excluded from training until approved. Review also offers raw ADC, manifest and configuration downloads.
+7. Cancelling capture stops the hardware and retains partial raw files without adding a training trial. Once decoding has started, wait for the result and reject it instead. A transport/stop failure reports an error and requires disconnect/reconnect. Closing the server requests cancellation before releasing the connection.
 
-Captures are bounded to **25 seconds / 512 MiB**, leaving arming margin within the configured 30-second FPGA timer. Raw artifacts live in `data/raw/<session-id>/<recording-id>/`. The app never overwrites an existing capture directory.
+Captures are bounded to **25 seconds / 512 MiB**, leaving arming margin within the configured 30-second FPGA timer. Raw artifacts live in `raw/<session-id>/<recording-id>/` under the dataset root: `~/Library/Application Support/Gasp/Recordings` in the installed app, or `data/` by default in the source workbench. The app never overwrites an existing capture directory.
 
 The default experimental profile uses **50 ADC frames/s, 16 chirp loops/frame and 12 TX×RX channels**, about **2.46 MB/s**. Each frame's chirp activity occupies about **2.26 ms**, followed by a frame gap. The average 800 chirp-loop samples/s is **not uniform 800 Hz sampling**, and is not a reproduction of mSilent's 240 Hz schedule. The importer retains burst timing and known missing-frame indices. Verify a known reflector and phase behavior before speech collection.
 
-DCA supports prompted recordings, training/evaluation, and prediction of completed takes. Train on matching DCA sessions, then use **Predict last completed DCA take** in Train & evaluate, or **Predict saved take** in a trial's Review view. Compatible models are filtered by source, profile and participant in Review. Results identify training playback, previously held-out data, or a new take; model inputs contain radar only. Signal/model checksums and loss thresholds are checked before prediction. The app's “Classify the last 3 seconds” button requires a continuous USB source. Continuous raw inference is a separate future acquisition mode.
+DCA supports prompted recordings and whole-visit baseline training/evaluation. **Predictions and transcription remain disabled in the installed app.** In the older source research workbench, an explicit `serve --research` launch enables **Predict last completed DCA take** and **Predict saved take**. Compatible models are filtered by source, profile and participant. Results identify training playback, previously held-out data, or a new take; model inputs contain radar only. Signal/model checksums and loss thresholds are checked before prediction. The research workbench's “Classify the last 3 seconds” button requires a continuous USB source. Continuous raw inference is a separate future acquisition mode.
 
 ### CLI alternative
 
@@ -65,3 +65,10 @@ The Python driver sends FPGA/configuration/record commands over UDP 4096 and rec
 The result prints a `session_id`. Append subsequent captures from the same visit using `--session-id ID`; omit that option for a new visit. Frames intersecting known loss intervals are discarded. The importer preserves the nonuniform chirp-burst timing, performs a range FFT, and exposes `[time, range, TX×RX]` complex data to the same review/training system. It retains the raw capture path and quality summary. There are sub-millisecond bursts separated by frame gaps; sample arrival is not assumed uniform.
 
 The DCA transport and decoder are covered by protocol/ADC fixtures. **Actual FPGA firmware compatibility, NIC delivery, lane ordering and RF data still require a hardware test.**
+
+
+## Tabletop enclosure for the raw ADC stack
+
+The [three-board capture enclosure](../enclosure/capture_stack/README.md) holds **IWR6843AOPEVM Rev G + MMWAVEICBOOST Rev B + DCA1000EVM Rev A** on a tabletop base with 0–40° indexed upward aim. Version **1.2** includes an open radar aperture, a sculpted water-ripple cover centered on the radar chip, matching vents through both front layers, printed board supports, cable tie stations, and a removable rear cable guide. Parametric source, STEP/STL/GLB exports, renders, geometry reports, and checksums are included.
+
+Use the [hardware counts](../enclosure/capture_stack/HARDWARE.md) and [cable-routing guide](../enclosure/capture_stack/CABLE_ROUTING.md). The four outer closure screws are M3 × 16; hidden carrier mounts use M3 × 12. This is an unprinted prototype: physical board/connector fit, short-cable bending, stability, temperatures, and RF performance remain to be tested. The smaller [standalone enclosure](../enclosure/iwr6843aop/README.md) houses only the USB radar board.

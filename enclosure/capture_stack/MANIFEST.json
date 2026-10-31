@@ -1,0 +1,106 @@
+{
+  "design": "Three-board tabletop raw ADC enclosure",
+  "version": "1.2 prototype",
+  "date": "2026-10-30",
+  "boards": [
+    "IWR6843AOPEVM PROC091G",
+    "MMWAVEICBOOST PROC074B",
+    "DCA1000EVM PROC048A"
+  ],
+  "pitch_degrees": [
+    0,
+    10,
+    20,
+    30,
+    40
+  ],
+  "default_pitch_degrees": 20,
+  "assembled_bounds_mm": [
+    214,
+    195,
+    223.2
+  ],
+  "print_quantities": {
+    "rear_shell": 1,
+    "front_bezel": 1,
+    "table_base": 1,
+    "dca_washer_1p8": 4,
+    "carrier_washer_0p8": 4,
+    "radar_washer_0p6": 2,
+    "fit_coupon": 1,
+    "cable_guide": 1,
+    "ripple_cover": 1
+  },
+  "validation": {
+    "geometry": "PASS",
+    "stack_and_generic_cables": "PASS",
+    "physical_fit": "NOT TESTED",
+    "stock_LVDS_bend": "NOT TESTED",
+    "thermal_RF_load": "NOT TESTED",
+    "nine_STL_meshes": "PASS",
+    "ripple_profile_and_vents": "PASS"
+  },
+  "appearance": {
+    "body": "charcoal",
+    "front": "Ivory structural front plus separate sculpted ripple cover",
+    "colors": "Suggested filament colors; no multi-material printing required",
+    "grille": "Seven concentric curved slots following the sculpted water profile through both front layers",
+    "case_corner_radius_mm": 14,
+    "front_edge_fillet_mm": 1.2,
+    "rear_edge_fillet_mm": 1.5,
+    "stand_crown_radius_mm": 18,
+    "stand_edge_fillet_mm": 1,
+    "foot_corner_radius_mm": 20,
+    "foot_top_edge_fillet_mm": 2
+  },
+  "cable_management": {
+    "tie_stations": 6,
+    "rear_guide_clear_passage_mm": [
+      52,
+      12
+    ],
+    "tested_bundle_gauge_mm": [
+      48,
+      11
+    ],
+    "service_loop": "Fit and verify with actual cables at all five angles"
+  },
+  "source_sha256": "0ba337268f2ae393755993e3107e011299a555b45de458550ff9d63f41f82e86",
+  "assembled_bounds_note": "Approximate CAD display bounds at 20 degrees; ripple cover print bounds are measured from the fine STL.",
+  "water_ripple": {
+    "reference": "references/ripple_panel_original.py",
+    "original_source": "Author’s solid water-impact sculpture; preserved in references/ripple_panel_original.py",
+    "reference_sha256": "e8c8291335d766aacaf3d959901e9381c7da443992db170d1d1b8f77b58381bf",
+    "reference_variant": "Solid, unperforated water-impact sculpture; perforated clock not used",
+    "centre_cassette_xy_mm": [
+      42.8958153,
+      2.408947040000001
+    ],
+    "xy_scale": 1.35,
+    "z_scale": 0.55,
+    "backing_nominal_mm": 1.2,
+    "cover_mesh_bounds_mm": [
+      180,
+      180,
+      7.64584
+    ],
+    "screw_washer_seat_height_mm": 3.2,
+    "mesh_linear_tolerance_mm": 0.02,
+    "adaptations": [
+      "Open flared radar window replaces the central spire",
+      "Perimeter and corner fastener seats blended into the surface",
+      "Matching arc slots cut through both front layers"
+    ],
+    "max_sampled_native_surface_deviation_mm": 0.0035481383409103895
+  },
+  "hardware_quantities": {
+    "M3x25": 4,
+    "M3x16": 8,
+    "M3x12": 6,
+    "M3_standard_nut": 18,
+    "M3_flat_washer": 10,
+    "M2x6_low_head": 2,
+    "M2_insert_OD3p2_L4": 2,
+    "cable_tie_150x2p5": 6
+  }
+}

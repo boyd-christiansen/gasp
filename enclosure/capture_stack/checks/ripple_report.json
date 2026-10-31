@@ -1,0 +1,197 @@
+{
+  "source": "references/ripple_panel_original.py \u2014 solid ripple panel",
+  "original_source_sha256": "e8c8291335d766aacaf3d959901e9381c7da443992db170d1d1b8f77b58381bf",
+  "unaltered_profile_functions": [
+    "_gaussian_ring",
+    "_smootherstep",
+    "_terminal_drop",
+    "_capillary_spectrum",
+    "_capillary_wave_mm",
+    "water_height_mm"
+  ],
+  "centre_cassette_xy_mm": [
+    42.8958153,
+    2.408947040000001
+  ],
+  "xy_scale": 1.35,
+  "z_scale": 0.55,
+  "native_surface_samples": [
+    {
+      "radius_mm": 40,
+      "angle_deg": 180,
+      "actual_height_mm": 4.992011662103759,
+      "target_height_mm": 4.991990891393923
+    },
+    {
+      "radius_mm": 45,
+      "angle_deg": 180,
+      "actual_height_mm": 5.281722715043601,
+      "target_height_mm": 5.281707818485461
+    },
+    {
+      "radius_mm": 60,
+      "angle_deg": 180,
+      "actual_height_mm": 7.228633317398213,
+      "target_height_mm": 7.228638612783006
+    },
+    {
+      "radius_mm": 65,
+      "angle_deg": 180,
+      "actual_height_mm": 7.522812552197394,
+      "target_height_mm": 7.522823569397228
+    },
+    {
+      "radius_mm": 70,
+      "angle_deg": 180,
+      "actual_height_mm": 6.990589910326016,
+      "target_height_mm": 6.990661258606402
+    },
+    {
+      "radius_mm": 75,
+      "angle_deg": 180,
+      "actual_height_mm": 5.652255753057788,
+      "target_height_mm": 5.65226147975546
+    },
+    {
+      "radius_mm": 90,
+      "angle_deg": 180,
+      "actual_height_mm": 6.215199830170684,
+      "target_height_mm": 6.215411160425301
+    },
+    {
+      "radius_mm": 95,
+      "angle_deg": 180,
+      "actual_height_mm": 7.198677494406175,
+      "target_height_mm": 7.198754838638853
+    },
+    {
+      "radius_mm": 100,
+      "angle_deg": 180,
+      "actual_height_mm": 5.861705399216362,
+      "target_height_mm": 5.862129792771504
+    },
+    {
+      "radius_mm": 110,
+      "angle_deg": 180,
+      "actual_height_mm": 5.827093652930284,
+      "target_height_mm": 5.825395626814694
+    },
+    {
+      "radius_mm": 115,
+      "angle_deg": 180,
+      "actual_height_mm": 5.694851100636925,
+      "target_height_mm": 5.694639680097894
+    },
+    {
+      "radius_mm": 130,
+      "angle_deg": 180,
+      "actual_height_mm": 1.1964518616590896,
+      "target_height_mm": 1.2
+    },
+    {
+      "radius_mm": 65,
+      "angle_deg": 90,
+      "actual_height_mm": 7.522787032629925,
+      "target_height_mm": 7.522823569397228
+    },
+    {
+      "radius_mm": 65,
+      "angle_deg": 120,
+      "actual_height_mm": 7.522828850255392,
+      "target_height_mm": 7.522823569397228
+    },
+    {
+      "radius_mm": 65,
+      "angle_deg": 240,
+      "actual_height_mm": 7.522824627265656,
+      "target_height_mm": 7.522823569397228
+    }
+  ],
+  "vent_overlap_mm3": [
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 1,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 2,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 3,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 4,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 5,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 6,
+      "overlap": 0.0
+    },
+    {
+      "part": "front_bezel_open_radar",
+      "slot": 7,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 1,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 2,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 3,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 4,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 5,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 6,
+      "overlap": 0.0
+    },
+    {
+      "part": "ripple_cover_print_flat_back_down",
+      "slot": 7,
+      "overlap": 0.0
+    }
+  ],
+  "limits": [
+    "Surface samples verify the fitted CAD, not a physical print.",
+    "The central jet is removed by the antenna opening; the perimeter and fastener lands are blended."
+  ],
+  "65mm_ring_height_range_mm": 4.181762546728862e-05,
+  "unchanged_STLs_vs_v1_1": [
+    "rear_shell",
+    "table_base",
+    "cable_guide",
+    "dca_washer_1p8",
+    "carrier_washer_0p8",
+    "radar_washer_0p6",
+    "fit_coupon"
+  ],
+  "status": "PASS"
+}

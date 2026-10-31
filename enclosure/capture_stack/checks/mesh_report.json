@@ -1,0 +1,110 @@
+{
+  "cable_guide.stl": {
+    "triangles": 788,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 6639.439059890809,
+    "bounds_mm": [
+      90.0,
+      12.0,
+      18.0
+    ]
+  },
+  "carrier_washer_0p8.stl": {
+    "triangles": 360,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 23.487021706639993,
+    "bounds_mm": [
+      6.99385,
+      6.99692,
+      0.8
+    ]
+  },
+  "dca_washer_1p8.stl": {
+    "triangles": 352,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 52.84402206336012,
+    "bounds_mm": [
+      7.0,
+      7.0,
+      1.8
+    ]
+  },
+  "fit_coupon.stl": {
+    "triangles": 568,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 7553.616444551963,
+    "bounds_mm": [
+      52.0,
+      25.0,
+      6.0
+    ]
+  },
+  "front_bezel.stl": {
+    "triangles": 5902,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 78686.22649742806,
+    "bounds_mm": [
+      180.0,
+      180.0,
+      13.72937
+    ]
+  },
+  "radar_washer_0p6.stl": {
+    "triangles": 368,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 6.6197390328,
+    "bounds_mm": [
+      4.396140000000001,
+      4.39806,
+      0.6
+    ]
+  },
+  "rear_shell.stl": {
+    "triangles": 7788,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 217285.69041427408,
+    "bounds_mm": [
+      192.0,
+      180.0,
+      62.5
+    ]
+  },
+  "ripple_cover.stl": {
+    "triangles": 79374,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 116939.29926050526,
+    "bounds_mm": [
+      180.0,
+      180.0,
+      7.645840000000001
+    ]
+  },
+  "table_base.stl": {
+    "triangles": 4442,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 339277.12990681856,
+    "bounds_mm": [
+      214.0,
+      195.0,
+      137.91525
+    ]
+  }
+}

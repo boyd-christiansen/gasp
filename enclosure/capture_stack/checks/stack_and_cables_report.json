@@ -1,0 +1,25 @@
+{
+  "interboard_box_conflicts": [],
+  "heatsink_box_conflicts": [],
+  "tie_under_floor_conflicts": [],
+  "plug_gauges_mm3": {
+    "DCA_Ethernet_boot_18x34x17": 0.0,
+    "DCA_Ethernet_cable_exit": 0.0,
+    "ICBOOST_USB_1_boot": 0.0,
+    "ICBOOST_USB_2_boot": 0.0,
+    "carrier_power_boot": 0.0,
+    "carrier_power_cable": 0.0,
+    "DCA_power_top_exit": 0.0,
+    "AOP_optional_USB_top_exit": 0.0,
+    "ICBOOST_USB_1_edge_boot": 0.0,
+    "ICBOOST_USB_2_edge_boot": 0.0
+  },
+  "assumptions": [
+    "Boot gauges are deliberately generic; confirm the actual cables.",
+    "The factory Samtec cable is not modeled: nominal endpoint displacement is a reach check, not a bend/termination verification.",
+    "External flexible cable bends and slack must be set by hand with the actual cables; tie heads stay outside."
+  ],
+  "lvds_connector_body_centre_separation_mm": 36.31837269788453,
+  "nominal_factory_cable_length_mm": 50.8,
+  "status": "PASS"
+}

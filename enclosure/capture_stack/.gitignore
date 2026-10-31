@@ -1,0 +1,5 @@
+vendor/*
+!vendor/*_geometry.json
+checks/*.log
+checks/dca_vendor_inspection.txt
+*.zip

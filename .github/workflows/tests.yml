@@ -27,6 +27,10 @@ jobs:
       - run: uv sync --frozen --extra dev
       - run: .venv/bin/python -u -m pytest -vv -o faulthandler_timeout=45
       - run: .venv/bin/python enclosure/iwr6843aop/checks/check_meshes.py
+      - name: Verify capture enclosure files
+        working-directory: enclosure/capture_stack
+        run: shasum -a 256 -c SHA256SUMS.txt
+      - run: .venv/bin/python enclosure/capture_stack/checks/check_meshes.py
       - if: runner.os == 'macOS'
         run: |
           uv sync --frozen --extra dev --extra macos-build

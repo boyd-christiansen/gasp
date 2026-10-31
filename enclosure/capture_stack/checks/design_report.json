@@ -1,0 +1,193 @@
+{
+  "parts": {
+    "rear_shell": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 217807.82619928615,
+      "bounds_mm": [
+        192.0,
+        180.0000001,
+        62.50000000000003
+      ]
+    },
+    "front_bezel_open_radar": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 78704.9420027326,
+      "bounds_mm": [
+        180.0,
+        180.0,
+        13.729365999999999
+      ]
+    },
+    "sculpted_water_ripple_cover": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 116887.78755543921,
+      "bounds_mm": [
+        180.00000020000013,
+        180.00000020000007,
+        7.206812933141194
+      ]
+    },
+    "table_base_0_10_20_30_40_degrees": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 339316.7305336081,
+      "bounds_mm": [
+        214.0,
+        195.0000001,
+        138.0
+      ]
+    },
+    "removable_rear_cable_guide": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 6642.281775448937,
+      "bounds_mm": [
+        90.0,
+        18.0,
+        12.0
+      ]
+    },
+    "DCA_washer_1p8": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 52.929553027680846,
+      "bounds_mm": [
+        7.0,
+        7.0,
+        1.8
+      ]
+    },
+    "ICBOOST_washer_0p8": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 23.524245790080375,
+      "bounds_mm": [
+        7.0,
+        7.0,
+        0.8
+      ]
+    },
+    "AOP_washer_0p6": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 6.630331295401259,
+      "bounds_mm": [
+        4.4,
+        4.4,
+        0.6
+      ]
+    },
+    "fit_coupon_M2_2p9_3p0_3p1_M3_nut": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "free_edges": 0,
+      "volume_mm3": 7553.889764425188,
+      "bounds_mm": [
+        52.0,
+        25.0,
+        6.0
+      ]
+    }
+  },
+  "collisions": [],
+  "checks": {
+    "shell_seam_overlap_mm3": 0.0,
+    "shell_seam_contact_mm": 0.0,
+    "ripple_cover_contact_mm": 0.0,
+    "ripple_cover_overlap_mm3": 0.0,
+    "60_degree_aperture_rear_shell_mm3": 0.0,
+    "60_degree_aperture_front_bezel_open_radar_mm3": 0.0,
+    "60_degree_aperture_sculpted_water_ripple_cover_mm3": 0.0,
+    "engagement_mm": {
+      "DCA_M3x25": 2.4,
+      "ICBOOST_M3x12": 2.3999999999999986,
+      "lid_M3x16": 2.4000000000000057,
+      "pivot_M3x16": 2.3999999999999915,
+      "guide_M3x12": 2.3999999999999995,
+      "AOP_M2x6": 3.7744
+    },
+    "rear_front_contact_mm": 0.0
+  },
+  "poses": [
+    {
+      "pitch": 0,
+      "base_collision_mm3": 0.0,
+      "lowest_case_z": 34.99999999999999,
+      "radar_height": 127.40894704000002,
+      "case_y_extent": [
+        -30.500000000000046,
+        32.00000000000002
+      ],
+      "height_at_548p64mm_distance": 127.40894704000002
+    },
+    {
+      "pitch": 10,
+      "base_collision_mm3": 0.0,
+      "lowest_case_z": 30.97228320463924,
+      "radar_height": 132.04848497670747,
+      "case_y_extent": [
+        -44.796731568561434,
+        47.77274117873034
+      ],
+      "height_at_548p64mm_distance": 228.7885196725997
+    },
+    {
+      "pitch": 20,
+      "base_collision_mm3": 0.0,
+      "lowest_case_z": 29.604051692943735,
+      "radar_height": 136.32193579422523,
+      "case_y_extent": [
+        -57.73233711665206,
+        62.13950833492024
+      ],
+      "height_at_548p64mm_distance": 336.01056512203445
+    },
+    {
+      "pitch": 30,
+      "base_collision_mm3": 0.0,
+      "lowest_case_z": 30.936878683999364,
+      "radar_height": 140.0994528519335,
+      "case_y_extent": [
+        -68.9137748154254,
+        74.66377481542538
+      ],
+      "height_at_548p64mm_distance": 456.8569045401297
+    },
+    {
+      "pitch": 40,
+      "base_collision_mm3": 0.0,
+      "lowest_case_z": 34.930266804125885,
+      "radar_height": 143.26625820554966,
+      "case_y_extent": [
+        -78.00130233848468,
+        84.96499712082024
+      ],
+      "height_at_548p64mm_distance": 603.6298798546525
+    }
+  ],
+  "limits": [
+    "Vendor component bodies use bounding envelopes; complete solder/connector detail is not modelled.",
+    "Physical printer fit, connector seating, stock ribbon bend/length, heat, RF and load performance remain untested."
+  ],
+  "status": "PASS"
+}

@@ -8,7 +8,7 @@ Do not commit recordings, reference media, trained pickle/joblib models, credent
 
 The default dataset and models stay local under ignored `data/`. Manual browser QA can use `python tests/preview_dca.py`; its generated data belongs under ignored `test-data/`. The production app has no emulator injection switch.
 
-The CAD rebuild procedure and dependency versions live in `enclosure/iwr6843aop/README.md`. Keep exported geometry, renders and fit reports consistent when modifying that design. The enclosure is currently a standalone USB prototype; do not assume it accepts a closed DCA/carrier stack.
+CAD rebuild procedures and dependency versions live in the [standalone USB enclosure guide](enclosure/iwr6843aop/README.md) and the [three-board capture enclosure guide](enclosure/capture_stack/README.md). The latter houses IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM. Keep exported geometry, renders, checksums and fit reports consistent when modifying either design. Run `python enclosure/capture_stack/checks/check_meshes.py` for the nine capture-stack print meshes. Both designs still require physical validation.
 
 ## Mac app
 
