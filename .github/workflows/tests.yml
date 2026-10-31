@@ -31,6 +31,12 @@ jobs:
         working-directory: enclosure/capture_stack
         run: shasum -a 256 -c SHA256SUMS.txt
       - run: .venv/bin/python enclosure/capture_stack/checks/check_meshes.py
+      - name: Verify standalone enclosure and desktop dock files
+        working-directory: enclosure/iwr6843aop
+        run: |
+          shasum -a 256 -c SHA256SUMS_v1_2.txt
+          shasum -a 256 -c DESKTOP_STAND_SHA256SUMS.txt
+      - run: .venv/bin/python enclosure/iwr6843aop/checks/check_dock_meshes.py
       - if: runner.os == 'macOS'
         run: |
           uv sync --frozen --extra dev --extra macos-build

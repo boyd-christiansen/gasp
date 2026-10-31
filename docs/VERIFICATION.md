@@ -72,3 +72,9 @@ Still unverified: physical radar acquisition and speech accuracy, microphone-to-
 Gasp now has its own app, bundle identifier, package, commands, data directory and repository identity. The only project-comparison credit is a brief README note; it is not bundled into the app. The installed Gasp interface was checked after migration and showed the existing verified visit. Saved recording artifacts matched their pre-migration checksums. The former development app was moved to Trash for recovery, and obsolete branded screenshots were removed from the current public tree.
 
 All 29 regression tests and the renamed standalone bundle's synthetic capture/review/training check passed. Runtime source and the built app bundle were searched for the previous project name; none remained. These checks do not change the earlier physical-hardware validation limits.
+
+## Desktop dock publication · 2026-10-31
+
+The single-board v1.2 enclosure and its drop-in desktop dock are now included alongside the three-board capture case. The dock's two STL files passed closed-edge, consistent-winding, connected-surface and positive-volume checks. The six v1.2 STL exports were also checked against their recorded mesh results, including the two separate closed washers in the combined print file. The dock source matches its manifest hash, and both published checksum lists verify their files.
+
+The initial README now leads with hardware renders, the application screenshot and a short first-training flow; setup, capture details and model guidance are linked through the documentation index. Local documentation links and image paths were checked. No radar acquisition, physical printing, cable-bend test, strength/stability test or RF measurement was performed for this publication.

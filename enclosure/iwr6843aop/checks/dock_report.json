@@ -1,0 +1,78 @@
+{
+  "parts": {
+    "single_board_desktop_dock_20deg": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "bounds_mm": [
+        100.0,
+        120.0,
+        41.43524635494647
+      ],
+      "free_edges": 0,
+      "volume_mm3": 82346.28139061572
+    },
+    "optional_cradle_fit_test": {
+      "valid": true,
+      "sound": true,
+      "solids": 1,
+      "bounds_mm": [
+        32.8000002,
+        19.8000002,
+        14.0000002
+      ],
+      "free_edges": 0,
+      "volume_mm3": 4182.172304818786
+    }
+  },
+  "interferences_mm3": {
+    "rear_shell_v1_2_standard_ties": 0.0,
+    "front_radome": 0.0,
+    "nut_retainer": 0.0,
+    "pcb_PROC091G": 0.0,
+    "ref_U2": 0.0,
+    "ref_J2": 0.0,
+    "ref_J11": 0.0,
+    "ref_S2": 0.0,
+    "ref_S1": 0.0,
+    "ref_J5": 0.0,
+    "ref_J1": 0.0,
+    "ref_J7": 0.0,
+    "ref_J6": 0.0,
+    "ref_J10": 0.0,
+    "ref_J3": 0.0,
+    "ref_J8": 0.0,
+    "ref_S3": 0.0,
+    "ref_SW2": 0.0,
+    "ref_SW3": 0.0,
+    "ref_heatsink_envelope": 0.0,
+    "hardware_1_4_20_nut_threads_schematic": 0.0,
+    "ref_straight_USB_boot_11x20x6_cable_4p4": 0.0,
+    "pcb_washer_OD4p4_ID2p3_T0p6": 0.0,
+    "retainer_head_gauge_-9": 0.0,
+    "retainer_head_gauge_9": 0.0,
+    "minimum_2B_minor_diameter_nut_gauge": 0.0
+  },
+  "insertion_overlap_mm3": {
+    "1": 0.0,
+    "3": 0.0,
+    "5": 0.0,
+    "8": 0.0,
+    "12": 0.0,
+    "20": 0.0
+  },
+  "measurements_mm": {
+    "heel_seat_contact": 8.881784197001252e-16,
+    "USB_reference_to_stand": 8.750000000000009,
+    "USB_reference_lowest_above_desk": 14.8414057671566,
+    "pin_to_minimum_nut_thread_crest": 0.23919999999999783,
+    "radar_height": 101.74724820809753,
+    "aim_height_at_1p8ft": 301.4358775359068
+  },
+  "limits": [
+    "Gravity retained; the pin is smooth and does not screw into the metal nut.",
+    "Actual print/fit, friction, cable bend, tip resistance and durability remain untested."
+  ],
+  "rigid_enclosure_projection_inside_5mm_inset_footprint": true,
+  "status": "PASS"
+}

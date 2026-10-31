@@ -1,0 +1,21 @@
+{
+  "accessory": "Single-board pill enclosure drop-in tabletop dock",
+  "version": "1.0 prototype",
+  "date": "2026-10-31",
+  "compatible_enclosure": "iwr6843aop v1.2, either front",
+  "retention": "Gravity, smooth locating pin and heel cradle; no locking thread",
+  "extra_hardware": [],
+  "print_files": {
+    "desktop_dock_20deg.stl": 1,
+    "optional_cradle_fit_test.stl": "optional, 1"
+  },
+  "footprint_mm": [
+    100,
+    120
+  ],
+  "pitch_degrees": 20,
+  "geometry_checks": "PASS",
+  "print_mesh_checks": "PASS",
+  "physical_print_fit_and_load": "NOT TESTED",
+  "source_sha256": "6e001c947e4e3d2ddcca0ec4d73ef0fb76c50dec1a475bd54095084d246ae9f6"
+}

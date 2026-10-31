@@ -1,0 +1,69 @@
+{
+  "rear_shell.stl": {
+    "triangles": 5846,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 45103.689418846865,
+    "bounds_mm": [
+      52.0,
+      175.88909,
+      32.3
+    ]
+  },
+  "front_open_aperture.stl": {
+    "triangles": 3118,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 14662.28605680695,
+    "bounds_mm": [
+      52.0,
+      174.0,
+      11.44364
+    ]
+  },
+  "nut_retainer.stl": {
+    "triangles": 356,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 643.8038768412844,
+    "bounds_mm": [
+      25.4,
+      9.0,
+      4.643749999999999
+    ]
+  },
+  "front_radome.stl": {
+    "triangles": 2978,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 17606.539215970704,
+    "bounds_mm": [
+      52.0,
+      174.0,
+      11.44364
+    ]
+  },
+  "pcb_washer.stl": {
+    "triangles": 368,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 6.6197390328,
+    "bounds_mm": [
+      4.396140000000001,
+      4.39806,
+      0.6
+    ]
+  },
+  "washer_print_pair.stl": {
+    "triangles": 736,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_components": 2,
+    "volume_mm3": 13.239478065599984
+  }
+}

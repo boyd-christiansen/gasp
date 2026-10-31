@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "tie_gauge_mm": [
+    2.8,
+    3.4
+  ],
+  "washer_bounds_mm": [
+    4.4,
+    4.4,
+    0.6
+  ],
+  "washer_volume_mm3": 6.630331295401259,
+  "pcb_screw_engagement_mm": 3.7744,
+  "rear_volume_mm3": 45168.508823176235,
+  "checked": "Rear against every assembly component; washers contact PCB and clear other modeled components; M2 shafts clear rear, PCB and washers."
+}

@@ -1,0 +1,26 @@
+{
+  "desktop_dock_20deg.stl": {
+    "triangles": 1552,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 82254.31505696237,
+    "bounds_mm": [
+      100.0,
+      120.0,
+      41.43525
+    ]
+  },
+  "optional_cradle_fit_test.stl": {
+    "triangles": 384,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_surface": true,
+    "volume_mm3": 4177.883845361946,
+    "bounds_mm": [
+      32.8,
+      19.8,
+      14.0
+    ]
+  }
+}
