@@ -52,3 +52,17 @@ Initial hosted macOS CI exposed a serial shutdown deadlock under output backpres
 - Integrate and compile the optional ROI module with the exact TI SDK before using custom firmware. No firmware was flashed or TI firmware image produced here.
 
 Follow [HARDWARE.md](HARDWARE.md) for the USB-first sequence and [EXPERIMENTS.md](EXPERIMENTS.md) for the data collection plan.
+
+## Installed training app · 0.2.0
+
+Local regression result: **29 tests passed**, plus the compiled gesture checks and standalone bundle capture-to-training check.
+
+- Built the AppKit/WebKit/SwiftUI shell and frozen Python capture engine on Apple Silicon macOS 26; verified the complete ad-hoc signature.
+- Installed at `~/Applications/Subvocal.app`. Opened it and used the actual interface to connect the simulator, create a paired calibration visit, record, finish early, inspect the take, explicitly confirm the rest label, and verify/keep it. The verified count increased and the script advanced. Clean quit removed the worker's ready file and stopped capture.
+- The first desktop take was a clearly labelled **SIMULATOR / software-verification** fixture, not a human radar recording. No microphone or Input Monitoring permission was granted during this check.
+- Added automated tests for pending/verified/rejected labels, immutable prompts, mode pairing/filtering, reviewed trim boundaries, reserved dataset roles, resume/cancel, optional WAV timing metadata, launch-token access, and DCA manual finish. Existing serial, raw ADC and training checks remain in the suite.
+- Compiled/executed the modifier-gesture checks: double-tap start, single-tap finish, long-hold exclusion, and modifier-plus-typing exclusion.
+- `tests/smoke_bundle.py` runs the frozen worker from an isolated temporary directory, creates two synthetic collection visits, records and verifies four takes in each, then trains a CPU phrase baseline with an entire reserved test visit held out. It checks that transcription and prediction remain disabled and verifies shutdown cleanup.
+- CI runs Python tests on Linux and Mac. Mac additionally compiles the gesture checks, builds/signs the complete app, and runs the standalone worker check.
+
+Still unverified: physical radar acquisition and speech accuracy, microphone-to-radar timing, actual microphone capture on this Mac, and the global shortcut after macOS permission is granted. The app exposes these as optional setup steps; on-screen collection works without microphone or Input Monitoring permission. The bundle is not notarized or Developer ID signed.

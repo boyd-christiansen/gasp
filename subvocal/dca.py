@@ -177,7 +177,7 @@ class DCASource:
         with self.lock:
             return self.state.copy()
 
-    def capture(self, output, duration=5, on_started=None, context=None):
+    def capture(self, output, duration=5, on_started=None, context=None, stop_event=None):
         if not self.cli or not self.control or not self.udp:
             raise ValueError("Arm the DCA source first")
         if not 0 < duration <= 25:
@@ -257,6 +257,8 @@ class DCASource:
                 on_started(report["prompt_ready_monotonic_ns"])
             deadline = time.monotonic() + duration
             while time.monotonic() < deadline:
+                if stop_event is not None and stop_event.is_set():
+                    break
                 if self.cancel.wait(min(0.05, max(0, deadline-time.monotonic()))):
                     raise CaptureCancelled("Capture cancelled; partial raw files retained")
                 if receive_errors:
@@ -356,7 +358,7 @@ def decode_adc(path, profile, missing_intervals=(), max_bytes=512*1024*1024):
         "note": "Burst timing preserved; validate lane/channel mapping on physical hardware before speech experiments"}
 
 
-def import_capture(store, folder, session, label, articulation="silent", notes="", recording_id=None):
+def import_capture(store, folder, session, label, articulation="silent", notes="", recording_id=None, extra=None):
     """Shared UI/CLI importer; keep raw loss offsets and original sample indices."""
     from .profile import parse_profile
     folder = Path(folder)
@@ -378,4 +380,4 @@ def import_capture(store, folder, session, label, articulation="silent", notes="
         "prompt_ready_monotonic_ns": manifest.get("prompt_ready_monotonic_ns"),
         "prompt_end_monotonic_ns": manifest.get("prompt_end_monotonic_ns"),
         "raw_quality": {k: manifest[k] for k in ("packets", "bytes", "missing_bytes", "duplicates",
-                                                "out_of_order", "tail_loss_unknown") if k in manifest}})
+                                                "out_of_order", "tail_loss_unknown") if k in manifest}, **(extra or {})})

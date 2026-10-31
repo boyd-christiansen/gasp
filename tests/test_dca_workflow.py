@@ -37,7 +37,7 @@ def connect(client, hardware):
 
 
 def test_real_udp_and_serial_prompt_capture_review_training_and_switch(tmp_path, hardware):
-    app = create_app(tmp_path)
+    app = create_app(tmp_path, research_enabled=True)
     with TestClient(app) as client:
         assert connect(client, hardware).status_code == 200
         live = client.get('/api/live').json()
@@ -159,3 +159,22 @@ def test_import_preserves_loss_gaps_for_training_filters(tmp_path):
     assert trial['frame_gaps'] == profile.loops
     numbers = store.load_signal(session['id'],trial['id'])['frame_numbers']
     assert numbers[profile.loops] == 2*profile.loops
+
+
+def test_manual_finish_retains_dca_take_for_review(tmp_path, hardware):
+    with TestClient(create_app(tmp_path)) as c:
+        assert connect(c,hardware).status_code == 200
+        s = c.post('/api/sessions',json={'name':'EMULATED collection', 'collection':{
+            'deck_id':'commands-v1','mode':'silent','visit_role':'train'}}).json()
+        step = s['collection']['plan']['steps'][0]
+        rid = c.post('/api/collect',json={'step_id':step['step_id'],'duration_s':20}).json()['id']
+        for _ in range(100):
+            if c.get('/api/record/'+rid).json()['status'] == 'recording': break
+            time.sleep(.02)
+        time.sleep(.55)
+        assert c.post('/api/record/'+rid+'/stop').status_code == 200
+        r = wait_record(c,rid)
+        assert r['status'] == 'complete',r
+        assert not r['trial']['accepted'] and r['trial']['review_status'] == 'pending'
+        assert r['trial']['prompt_text'] == step['prompt_text']
+        assert r['trial']['duration_s'] < 5

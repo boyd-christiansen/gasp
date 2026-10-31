@@ -2,6 +2,8 @@
 
 An independent desktop radar research project inspired by [Subvocal](https://subvocal.company/preorder) and [Aarush Yadav's announcement](https://x.com/AarushYadav47/status/2116198463847408066). It pairs a local Mac workbench for **TI IWR6843AOPEVM** silent-speech experiments with a printable enclosure. This project is not affiliated with or endorsed by Subvocal or Texas Instruments.
 
+**New: [Subvocal Training Studio for Mac](docs/MAC_APP.md)** — an installed, training-focused app with a menu bar, recording overlay, double-tap shortcut, personal calibration, resumable scripts, reference audio, explicit take approval and whole-visit baseline evaluation. **Transcription and text insertion are disabled.**
+
 Capture complex radar signals over USB or raw ADC through **MMWAVEICBOOST + DCA1000EVM**, collect prompted trials with optional reference video/audio, review labels, train personal phrase models, and predict saved takes. Acquisition runs locally without TI's capture GUI, a cloud account, or an API key.
 
 **Ready to exercise without hardware. Physical radar validation is still pending.** The simulator checks the software; its labelled synthetic waveforms are deliberately learnable and provide no evidence of speech recognition.
@@ -18,7 +20,23 @@ Parametric CAD, STEP/STL exports, assembled/exploded/interior renders, fit check
 
 These are CAD renders of an unprinted Rev G prototype. **The current case supports standalone USB operation; the MMWAVEICBOOST/DCA stack needs connector access outside this closed case.** Physical fit, RF behavior, thermal performance and mount strength remain to be tested.
 
-## Start
+## Installed Mac app
+
+The app bundles its capture engine and runtime. On this development Mac it is installed at `~/Applications/Subvocal.app`. Open **Subvocal**, choose **Session setup**, and practice with the clearly labelled simulator. Use **Personal calibration** first, then **First phrase experiment** across multiple visits. Recordings stay in Application Support and never enter this public repository.
+
+To build your own Apple Silicon development app:
+
+```sh
+uv sync --frozen --extra dev --extra macos-build
+./scripts/build-macos.sh
+./scripts/install-macos.sh
+```
+
+See the [Mac app guide](docs/MAC_APP.md) for recording controls, optional microphone/Input Monitoring permissions, data review, timing limits, and build/signing status. The development bundle is ad-hoc signed, not notarized.
+
+![Training Studio · simulator capture](docs/training-studio-preview.jpg)
+
+## Source workbench
 
 Python 3.12 and [uv](https://docs.astral.sh/uv/) are recommended. On a fresh checkout:
 
@@ -37,7 +55,7 @@ Or, from this directory:
 ./scripts/run.sh
 ```
 
-Open **http://127.0.0.1:8765** in Chrome. Dependencies stay in the project-local `.venv`; `uv.lock` pins the dependency graph. No global Python packages are changed. The optional CAD rebuild toolchain is documented separately in the enclosure guide.
+Open **http://127.0.0.1:8765/training** for the training workspace, or the root page for the older research workbench. Experimental classifier prediction endpoints are disabled by default; only a source launch with `serve --research` enables them. This does not enable transcription. Use Chrome for browser reference media. Dependencies stay in the project-local `.venv`; `uv.lock` pins the dependency graph. No global Python packages are changed. The optional CAD rebuild toolchain is documented separately in the enclosure guide.
 
 ## Without the board
 
@@ -47,7 +65,7 @@ Open **http://127.0.0.1:8765** in Chrome. Dependencies stay in the project-local
 4. Create another session to represent a different visit. Record at least two takes of each phrase on each side of the train/test split.
 5. Review takes, correct labels or exclude bad recordings.
 6. In **Train & evaluate**, choose whole training sessions and a separate test session. Train the CPU baseline.
-7. Classify the last three seconds from a matching active session. Accepted results go into an editable scratchpad; nothing types into other apps or sends messages.
+7. For explicitly enabled research evaluation only (`serve --research`), classify a saved take or a matching USB window. This is a closed-set lab check; it never enables dictation or inserts text into other apps.
 
 For an instant, bounded synthetic dataset:
 
@@ -75,7 +93,7 @@ The example 20 Hz profile uses 64 range bins and 12 virtual antenna channels, ap
 
 For raw ADC capture, disconnect USB acquisition and select **DCA1000 · raw ADC over Ethernet** in the app. The [DCA1000 guide](docs/HARDWARE.md#dca1000-fallback) covers the IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM stack, Ethernet settings and USB command port. Each prompted take captures raw packets, stops the hardware and imports the take into the same review/training workflow. The app shows progress, supports cancellation, and retains raw ADC/manifest/configuration downloads. No mmWave Studio is required. DCA plots update after a take; continuous live decoding remains USB-only.
 
-**DCA prediction:** train on matching DCA sessions, then use **Predict last completed DCA take**, or open any saved trial in Review and choose **Predict saved take**. The model receives radar only. The app verifies signal/model checksums and marks each result as a training playback, a take already in the held-out report, or new to this model. Scores are uncalibrated; replaying training data is not an accuracy measurement. Models are restricted to the same participant, source, profile and antenna layout. USB and DCA data cannot be silently mixed.
+**DCA research prediction (requires `serve --research`; absent from the installed app):** train on matching DCA sessions, then use **Predict last completed DCA take**, or open any saved trial in Review and choose **Predict saved take**. The model receives radar only. The app verifies signal/model checksums and marks each result as a training playback, a take already in the held-out report, or new to this model. Scores are uncalibrated; replaying training data is not an accuracy measurement. Models are restricted to the same participant, source, profile and antenna layout. USB and DCA data cannot be silently mixed.
 
 The default raw profile uses 50 ADC frames/s × 16 chirp loops, with burst timing preserved. This is not uniform 800 Hz sampling and has not been validated for speech. Start with a known reflector. An [optional C firmware packet encoder](firmware/README.md) is also included for a future narrower USB phase stream. It is host-compiled/tested, **not a built or flashed TI firmware image**.
 

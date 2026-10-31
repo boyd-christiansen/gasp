@@ -228,3 +228,6 @@ action('copyText',async()=>{await navigator.clipboard.writeText($('annotation').
 window.addEventListener('beforeunload',()=>stream?.getTracks().forEach(t=>t.stop()));
 async function init(){try{profiles=await api('profiles');selectSource();const health=await api('health');$('dataLocation').textContent='Local data: '+health.data_root;shufflePlan();await poll();setInterval(poll,350);}catch(e){notice(e.message,true);}}
 init();
+
+// Predictions require explicit research mode; the training-first app never enables them.
+api("health").then(h=>{if(!h.research_predictions_enabled){for(const id of ["decode","predictTrial","predictLast"]){const e=document.getElementById(id);if(e)e.hidden=true;}}}).catch(()=>{});

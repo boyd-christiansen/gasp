@@ -22,3 +22,10 @@ enclosure/iwr6843aop/renders/ti_*.png
 enclosure/iwr6843aop/*.zip
 enclosure/iwr6843aop/instacart*
 enclosure/iwr6843aop/*cart*
+
+# Local application bundles and reference audio
+build/
+dist/
+*.wav
+*.caf
+enclosure/iwr6843aop/AMAZON_ORDER.md

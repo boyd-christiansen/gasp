@@ -1,5 +1,6 @@
 import hashlib
 import json
+import threading
 import os
 from pathlib import Path
 import re
@@ -25,6 +26,7 @@ def atomic_json(path: Path, value):
 
 class Store:
     def __init__(self, root):
+        self.lock = threading.RLock()
         self.root = Path(root).expanduser().resolve()
         for folder in ("sessions", "models", "jobs"):
             (self.root / folder).mkdir(parents=True, exist_ok=True)
@@ -32,13 +34,15 @@ class Store:
     def session_dir(self, sid):
         return self.root / "sessions" / checked_id(sid)
 
-    def create_session(self, name, subject, source, profile, notes=""):
+    def create_session(self, name, subject, source, profile, notes="", collection=None):
         sid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
         path = self.session_dir(sid)
         path.mkdir()
         manifest = {"schema": 1, "id": sid, "name": name, "subject": subject, "source": source,
                     "synthetic": source == "simulator", "created_ns": time.time_ns(),
                     "profile": profile.summary(), "notes": notes}
+        if collection:
+            manifest.update(schema=2, collection=collection)
         atomic_json(path / "session.json", manifest)
         (path / "radar.cfg").write_text(profile.text)
         (path / "trials").mkdir()
@@ -54,11 +58,13 @@ class Store:
             trials = self.trials(item["id"])
             item["trial_count"] = len(trials)
             item["accepted_count"] = sum(t.get("accepted", True) for t in trials)
+            item["pending_count"] = sum(t.get("review_status") == "pending" for t in trials)
             result.append(item)
-        return result
+        return sorted(result, key=lambda s: s["created_ns"], reverse=True)
 
     def trials(self, sid):
-        return [json.loads(f.read_text()) for f in sorted((self.session_dir(sid) / "trials").glob("*/trial.json"))]
+        return sorted((json.loads(f.read_text()) for f in (self.session_dir(sid) / "trials").glob("*/trial.json")),
+                      key=lambda t: t["created_ns"])
 
     def trial_dir(self, sid, tid):
         return self.session_dir(sid) / "trials" / checked_id(tid)
@@ -91,13 +97,51 @@ class Store:
         return meta
 
     def update_trial(self, sid, tid, updates):
-        path = self.trial_dir(sid, tid) / "trial.json"
-        meta = json.loads(path.read_text())
-        for key in ("label", "accepted", "notes"):
-            if key in updates:
-                meta[key] = updates[key]
-        atomic_json(path, meta)
-        return meta
+        with self.lock:
+            path = self.trial_dir(sid, tid) / "trial.json"
+            meta = json.loads(path.read_text())
+            for key in ("label", "accepted", "notes", "confirmed_text", "utterance_start_s", "utterance_end_s"):
+                if key in updates:
+                    meta[key] = updates[key]
+            if meta.get("collection_protocol"):
+                if "label" in updates:
+                    raise ValueError("Review the confirmed transcript; the original prompt is immutable")
+                start, end = meta.get("utterance_start_s", 0), meta.get("utterance_end_s", meta["duration_s"])
+                if not 0 <= start < end <= meta["duration_s"] + .001:
+                    raise ValueError("Utterance boundaries must lie inside the saved radar recording")
+                if updates.get("accepted"):
+                    if not (meta.get("confirmed_text") or "").strip():
+                        raise ValueError("Confirm the actual text or movement label before accepting this take")
+                    meta.update(label=meta["confirmed_text"].strip(), review_status="verified",
+                                transcript_source="human_confirmed", reviewed_ns=time.time_ns())
+                elif "accepted" in updates:
+                    meta.update(review_status="rejected", reviewed_ns=time.time_ns())
+                elif any(k in updates for k in ("confirmed_text", "utterance_start_s", "utterance_end_s")):
+                    meta.update(accepted=False, review_status="pending")
+            atomic_json(path, meta)
+            return meta
+
+    def collection_record(self, sid, step_id):
+        session = self.session(sid)
+        collection = session.get("collection")
+        if not collection:
+            raise ValueError("Create a collection session first")
+        step = next((s for s in collection["plan"]["steps"] if s["step_id"] == step_id), None)
+        if not step:
+            raise ValueError("Unknown script step for this session")
+        return step, dict(collection_protocol=collection["plan"]["protocol"],
+            plan_step_id=step_id, prompt_id=step["prompt_id"], prompt_text=step["prompt_text"],
+            target_text=step["target_text"], pair_id=step["pair_id"], confirmed_text=None,
+            asr_raw_text=None, output_text=None, transcript_source="unverified_prompt",
+            review_status="pending", accepted=False, calibration_id=collection.get("calibration_id"))
+
+    def add_trial_fields(self, sid, tid, fields):
+        with self.lock:
+            path = self.trial_dir(sid, tid) / "trial.json"
+            meta = json.loads(path.read_text())
+            meta.update(fields)
+            atomic_json(path, meta)
+            return meta
 
     def load_signal(self, sid, tid):
         with np.load(self.trial_dir(sid, tid) / "radar.npz", allow_pickle=False) as arr:

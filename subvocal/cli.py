@@ -38,6 +38,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="Open local recording and training UI")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--research", action="store_true", help="Enable experimental classifier evaluation; not transcription")
     sub.add_parser("doctor", help="Inspect Mac ports and prerequisites without opening hardware")
     inspect = sub.add_parser("profile", help="Inspect and budget a bundled or custom profile")
     inspect.add_argument("name", nargs="?", default="usb-phase-20hz")
@@ -47,6 +48,7 @@ def main():
     training = sub.add_parser("train", help="Train the CPU baseline with a whole-session holdout")
     training.add_argument("--sessions", nargs="+", required=True)
     training.add_argument("--test", nargs="+", required=True)
+    training.add_argument("--articulation", choices=("silent", "voiced", "whisper"), help="Select one mode when visits contain paired takes")
     replay = sub.add_parser("replay", help="Validate a saved SDK UART binary through the streaming parser")
     replay.add_argument("path")
     replay.add_argument("--range-bins", type=int, default=64)
@@ -69,7 +71,7 @@ def main():
             import uvicorn
             from .server import create_app
             print(f"Desktop Subvocal: http://127.0.0.1:{args.port}")
-            uvicorn.run(create_app(args.data), host="127.0.0.1", port=args.port, log_level="info", access_log=False)
+            uvicorn.run(create_app(args.data, research_enabled=args.research), host="127.0.0.1", port=args.port, log_level="info", access_log=False)
             return
         if args.command == "doctor":
             print(json.dumps({"python": sys.version, "platform": sys.platform, "serial_ports": ports(),
@@ -89,7 +91,7 @@ def main():
             print(json.dumps({"synthetic": True, "session_ids": seed_demo(store,args.sessions,args.repetitions)}, indent=2))
         elif args.command == "train":
             from .training import train
-            print(json.dumps(train(store, args.sessions, args.test), indent=2))
+            print(json.dumps(train(store, args.sessions, args.test, articulation=args.articulation), indent=2))
         elif args.command == "replay":
             p, count, complex_count = Parser(), 0, 0
             with Path(args.path).open("rb") as f:

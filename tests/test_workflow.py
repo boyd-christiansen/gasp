@@ -73,11 +73,11 @@ def test_api_background_training_and_local_origin(tmp_path):
             time.sleep(.025)
         assert job['status']=='complete',job
         assert c.get('/api/models').json()[0]['id']==job['report']['id']
-        assert c.post('/api/decode',json={'model_id':job['report']['id']}).status_code==400
+        assert c.post('/api/decode',json={'model_id':job['report']['id']}).status_code==403
 
 
 def test_saved_prediction_provenance_quality_and_no_label_input(tmp_path):
-    app=create_app(tmp_path);store=app.state.store;ids=seed_demo(store,sessions=2,repetitions=2)
+    app=create_app(tmp_path, research_enabled=True);store=app.state.store;ids=seed_demo(store,sessions=2,repetitions=2)
     report=train(store,ids,[ids[-1]])
     with TestClient(app) as client:
         for sid,use in ((ids[0],'training'),(ids[-1],'held_out')):

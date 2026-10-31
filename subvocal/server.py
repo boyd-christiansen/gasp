@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ import time
 import uuid
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .engine import Engine
@@ -17,6 +18,7 @@ from .features import FeatureSpec
 from .profile import bundled_profile, parse_profile
 from .storage import Store, atomic_json, checked_id
 from . import training
+from .collection import DECKS, make_plan
 from .transport import ports
 
 STATIC = Path(__file__).parent / "static"
@@ -34,10 +36,33 @@ class Connect(BaseModel):
     confirm_layout: bool = False
 
 
+class CollectionInput(BaseModel):
+    deck_id: str
+    mode: str = Field(default="silent", pattern="^(silent|voiced|paired)$")
+    repetitions: int = Field(default=2, ge=1, le=10)
+    visit_role: str = Field(default="train", pattern="^(train|validation|test|calibration)$")
+    calibration_id: str | None = None
+    distance_cm: float = Field(default=45, ge=10, le=200)
+    position_notes: str = Field(default="", max_length=2000)
+
+
+class CollectionRecord(BaseModel):
+    reference_expected: bool = False
+    step_id: str
+    duration_s: float | None = Field(default=None, ge=.5, le=25)
+
+
+class CaptureEvent(BaseModel):
+    name: str = Field(pattern="^(cue_shown|speech_start|speech_end)$")
+    estimated_server_ns: int = Field(gt=0)
+    uncertainty_ms: float = Field(ge=0, le=60000)
+
+
 class SessionInput(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     subject: str = Field(default="Boyd", min_length=1, max_length=80)
     notes: str = Field(default="", max_length=4000)
+    collection: CollectionInput | None = None
 
 
 class TrialInput(BaseModel):
@@ -51,6 +76,9 @@ class TrialUpdate(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=200)
     accepted: bool | None = None
     notes: str | None = Field(default=None, max_length=4000)
+    confirmed_text: str | None = Field(default=None, max_length=200)
+    utterance_start_s: float | None = Field(default=None, ge=0)
+    utterance_end_s: float | None = Field(default=None, gt=0)
 
 
 class TrainInput(BaseModel):
@@ -58,6 +86,7 @@ class TrainInput(BaseModel):
     test_session_ids: list[str] = Field(min_length=1, max_length=49)
     range_min_m: float = Field(default=0.2, ge=0, le=10)
     range_max_m: float = Field(default=0.85, gt=0, le=10)
+    articulation: str | None = Field(default=None, pattern="^(silent|voiced|whisper)$")
 
 
 class DecodeInput(BaseModel):
@@ -73,7 +102,7 @@ class PredictTrialInput(BaseModel):
     threshold: float = Field(default=0.65, ge=0, le=1)
 
 
-def create_app(data_root=None):
+def create_app(data_root=None, research_enabled=False, app_token=None):
     store = Store(data_root or os.environ.get("SUBVOCAL_DATA", "data"))
     engine = Engine(store)
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="baseline-training")
@@ -86,6 +115,7 @@ def create_app(data_root=None):
 
     app = FastAPI(title="Desktop Subvocal", lifespan=lifespan)
     app.state.store, app.state.engine = store, engine
+    app.state.research_enabled = research_enabled
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -95,6 +125,10 @@ def create_app(data_root=None):
         origin = request.headers.get("origin")
         if origin and origin not in {f"http://{request.headers.get('host')}", "http://testserver"}:
             return JSONResponse({"detail": "Cross-origin access rejected"}, status_code=403)
+        if app_token and request.url.path != "/desktop":
+            supplied = request.cookies.get("subvocal_app", "") or request.headers.get("authorization", "").removeprefix("Bearer ")
+            if not hmac.compare_digest(supplied, app_token):
+                return JSONResponse({"detail": "Open the installed Subvocal app"}, status_code=403)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"
@@ -113,12 +147,28 @@ def create_app(data_root=None):
     def index():
         return FileResponse(STATIC / "index.html")
 
+    @app.get("/training")
+    def training_workspace():
+        return FileResponse(STATIC / "training.html")
+
+    @app.get("/desktop")
+    def desktop(token: str = ""):
+        if not app_token or not hmac.compare_digest(token, app_token):
+            raise HTTPException(403, "Invalid app session")
+        response = RedirectResponse("/training", status_code=303)
+        response.set_cookie("subvocal_app", app_token, httponly=True, samesite="strict")
+        return response
+
+    @app.get("/api/decks")
+    def decks():
+        return DECKS
+
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.1.0", "data_root": str(store.root),
-                "hardware_verified": False, "server_monotonic_ns": time.monotonic_ns()}
+        return {"ok": True, "version": "0.2.0", "data_root": str(store.root),
+                "hardware_verified": False, "transcription_enabled": False, "research_predictions_enabled": research_enabled, "server_monotonic_ns": time.monotonic_ns()}
 
     @app.get("/api/clock")
     def clock_sync():
@@ -159,7 +209,49 @@ def create_app(data_root=None):
 
     @app.post("/api/sessions")
     def new_session(body: SessionInput):
-        return engine.create_session(body.name, body.subject, body.notes)
+        collection = None
+        if body.collection:
+            c = body.collection
+            plan = make_plan(c.deck_id, c.mode, c.repetitions)
+            if plan["calibration"] and c.visit_role != "calibration":
+                raise ValueError("Calibration decks must use the calibration role")
+            if c.calibration_id:
+                previous = store.session(c.calibration_id)
+                if not previous.get("collection", {}).get("plan", {}).get("calibration"):
+                    raise ValueError("Choose a calibration session")
+                if not engine.source or (previous["subject"], previous["source"], previous["profile"]["sha256"]) != (
+                    body.subject, getattr(engine.source, "kind", "simulator" if engine.source.synthetic else "serial"), engine.profile.sha256):
+                    raise ValueError("Calibration participant, source and profile must match this session")
+                if not any(t.get("accepted") for t in store.trials(c.calibration_id)):
+                    raise ValueError("Review calibration takes before linking this reference")
+            collection = dict(c.model_dump(), plan=plan)
+        return engine.create_session(body.name, body.subject, body.notes, collection)
+
+    @app.get("/api/sessions/{sid}")
+    def get_session(sid: str):
+        return store.session(sid)
+
+    @app.post("/api/sessions/{sid}/resume")
+    def resume_session(sid: str):
+        session = store.session(sid)
+        with engine.lock:
+            if engine.recording or not engine.source or engine.status != "connected":
+                raise ValueError("Connect the matching source and finish the current take first")
+            kind = getattr(engine.source, "kind", "simulator" if engine.source.synthetic else "serial")
+            if (session["source"], session["profile"]["sha256"]) != (kind, engine.profile.sha256):
+                raise ValueError("Connect the same source and profile to resume this visit")
+            engine.session = session
+            engine.last_trial = None
+        return session
+
+    @app.post("/api/collect")
+    def collect(body: CollectionRecord):
+        with engine.lock:
+            if not engine.session:
+                raise ValueError("Create a collection session first")
+            step, extra = store.collection_record(engine.session["id"], body.step_id)
+            extra["reference_expected"] = body.reference_expected
+            return engine.record(step["target_text"], body.duration_s or step["duration_s"], step["articulation"], "", extra)
 
     @app.get("/api/sessions/{sid}/trials")
     def trials(sid: str):
@@ -177,6 +269,14 @@ def create_app(data_root=None):
             raise HTTPException(404, "Recording not found in this app run")
         with engine.lock:
             return engine.record_results[rid].copy()
+
+    @app.post("/api/record/{rid}/stop")
+    def stop_record(rid: str):
+        return engine.stop_record(rid)
+
+    @app.post("/api/record/{rid}/events")
+    def capture_event(rid: str, body: CaptureEvent):
+        return engine.add_event(rid, body.model_dump())
 
     @app.post("/api/record/{rid}/cancel")
     def cancel_record(rid: str):
@@ -218,9 +318,9 @@ def create_app(data_root=None):
         path = store.trial_dir(sid, tid)
         meta_path = path / "trial.json"
         meta = json.loads(meta_path.read_text())
-        if request.headers.get("content-type", "").split(";")[0] not in ("video/webm", "audio/webm", "video/mp4"):
+        if request.headers.get("content-type", "").split(";")[0] not in ("video/webm", "audio/webm", "video/mp4", "audio/wav"):
             raise ValueError("Expected a browser WebM/MP4 recording")
-        suffix = ".mp4" if request.headers.get("content-type", "").startswith("video/mp4") else ".webm"
+        suffix = ".wav" if request.headers.get("content-type", "").startswith("audio/wav") else ".mp4" if request.headers.get("content-type", "").startswith("video/mp4") else ".webm"
         target = path / ("reference" + suffix)
         if target.exists():
             raise ValueError("Reference recording already exists")
@@ -237,12 +337,22 @@ def create_app(data_root=None):
             os.replace(tmp, target)
         finally:
             tmp.unlink(missing_ok=True)
-        meta["media"] = {"file": target.name, "bytes": count, "sha256": digest.hexdigest(),
+        audio_timing = None
+        if request.headers.get("x-audio-timing"):
+            try:
+                audio_timing = json.loads(request.headers["x-audio-timing"])
+            except (ValueError, TypeError) as exc:
+                target.unlink(missing_ok=True)
+                raise ValueError("Invalid audio timing metadata") from exc
+        media_fields = {"file": target.name, "bytes": count, "sha256": digest.hexdigest(),
                          "browser_start_server_ns": request.headers.get("x-media-start-server-ns"),
                          "clock_uncertainty_ms": request.headers.get("x-clock-uncertainty-ms"),
                          "synchronization": "Browser/software timestamps only; not hardware synchronized"}
-        atomic_json(meta_path, meta)
-        return meta["media"]
+        media_fields["native_audio_timing"] = audio_timing
+        if audio_timing:
+            media_fields["synchronization"] = "AVAudioEngine host/sample timestamps; software radar anchor, not hardware synchronized"
+        store.add_trial_fields(sid, tid, {"media": media_fields})
+        return media_fields
 
     @app.get("/api/sessions/{sid}/trials/{tid}/media")
     def get_media(sid: str, tid: str):
@@ -261,7 +371,7 @@ def create_app(data_root=None):
             atomic_json(job_path, {"id": jid, "status": "running"})
             try:
                 report = training.train(store, body.session_ids, body.test_session_ids,
-                    FeatureSpec(range_min_m=body.range_min_m, range_max_m=body.range_max_m))
+                    FeatureSpec(range_min_m=body.range_min_m, range_max_m=body.range_max_m), articulation=body.articulation)
                 atomic_json(job_path, {"id": jid, "status": "complete", "report": report})
             except Exception as exc:
                 atomic_json(job_path, {"id": jid, "status": "failed", "error": str(exc)})
@@ -283,10 +393,14 @@ def create_app(data_root=None):
 
     @app.post("/api/predict-trial")
     def predict_trial(body: PredictTrialInput):
+        if not research_enabled:
+            raise HTTPException(403, "Predictions are disabled in this training-first release")
         return training.predict_trial(store, body.model_id, body.session_id, body.trial_id, body.threshold)
 
     @app.post("/api/decode")
     def decode(body: DecodeInput):
+        if not research_enabled:
+            raise HTTPException(403, "Transcription is disabled; collect and review training data first")
         with engine.lock:
             if getattr(engine.source, "kind", None) == "dca1000":
                 raise ValueError("DCA is prompted capture; use saved trials for evaluation. Live decoding requires a continuous USB source")

@@ -82,8 +82,11 @@ class Engine:
             self.status = "disconnected"
 
     def close(self):
-        if isinstance(self.source, DCASource) and self.recording:
-            self.source.cancel.set()
+        if self.recording:
+            self.recording["_cancel"].set()
+            self.recording["_stop"].set()
+            if isinstance(self.source, DCASource):
+                self.source.cancel.set()
         if self.recorder_thread:
             self.recorder_thread.join(35)
         self.disconnect()
@@ -122,18 +125,18 @@ class Engine:
         except Exception as exc:
             self._error(str(exc))
 
-    def create_session(self, name, subject, notes):
+    def create_session(self, name, subject, notes, collection=None):
         with self.lock:
             if self.status != "connected" or not self.source:
                 raise ValueError("Connect a source first")
             if self.recording:
                 raise ValueError("A trial is active")
             kind = getattr(self.source, "kind", "simulator" if self.source.synthetic else "serial")
-            self.session = self.store.create_session(name, subject, kind, self.profile, notes)
+            self.session = self.store.create_session(name, subject, kind, self.profile, notes, collection)
             self.last_trial = None
             return self.session
 
-    def record(self, label, duration, articulation, notes):
+    def record(self, label, duration, articulation, notes, collection=None):
         with self.lock:
             if self.recording:
                 raise ValueError("A trial is already recording")
@@ -147,7 +150,10 @@ class Engine:
             rid = uuid.uuid4().hex
             started = time.monotonic_ns()
             self.recording = {"id": rid, "label": label, "duration_s": duration,
-                              "started_ns": started, "items": []}
+                              "started_ns": started, "items": [], "collection": collection,
+                              "_stop": threading.Event(), "_cancel": threading.Event(), "events": []}
+            if collection and not is_dca:
+                self.recording["items"] = [x for x in self.ring if x["t"] >= started-350_000_000]
             if self.source.synthetic:
                 self.source.label = label
                 self.source.started = time.monotonic()
@@ -160,15 +166,48 @@ class Engine:
             self.recorder_thread.start()
             return self.record_results[rid].copy()
 
+    def stop_record(self, rid):
+        with self.lock:
+            if not self.recording or self.recording["id"] != rid:
+                raise ValueError("No active capture with this ID")
+            result = self.record_results[rid]
+            if result["status"] != "recording":
+                raise ValueError("Wait until the sensor is recording")
+            if time.monotonic_ns()-result["server_monotonic_start_ns"] < 500_000_000:
+                raise ValueError("Record for at least half a second")
+            self.recording["stop_requested_ns"] = time.monotonic_ns()
+            self.recording["_stop"].set()
+            result["status"] = "processing"
+            return result.copy()
+
     def cancel_record(self, rid):
         with self.lock:
-            if not self.recording or self.recording["id"] != rid or not isinstance(self.source, DCASource):
-                raise ValueError("No active DCA capture with this ID")
-            if self.record_results[rid]["status"] == "processing":
-                raise ValueError("Raw capture is finished; decoding is already in progress")
-            self.source.cancel.set()
+            if not self.recording or self.recording["id"] != rid:
+                raise ValueError("No active capture with this ID")
+            if isinstance(self.source, DCASource) and self.record_results[rid]["status"] == "processing":
+                raise ValueError("Raw capture has ended; wait for decoding, then reject the saved take")
+            self.recording["_cancel"].set()
+            self.recording["_stop"].set()
+            if isinstance(self.source, DCASource):
+                self.source.cancel.set()
             self.record_results[rid]["status"] = "cancelling"
             return self.record_results[rid].copy()
+
+    def add_event(self, rid, event):
+        with self.lock:
+            if not self.recording or self.recording["id"] != rid:
+                raise ValueError("Capture is no longer active")
+            if len(self.recording["events"]) >= 20:
+                raise ValueError("Too many capture events")
+            self.recording["events"].append(dict(event, received_monotonic_ns=time.monotonic_ns()))
+            return {"ok": True}
+
+    def collection_fields(self, rec):
+        if not rec.get("collection"):
+            return {}
+        return dict(rec["collection"], schema=2, capture_events=rec["events"],
+                    stop_requested_monotonic_ns=rec.get("stop_requested_ns"),
+                    timing_note="Software/host timestamps; radar-to-audio offset must be validated on hardware")
 
     def _finish_dca_record(self, rid, duration, articulation, notes):
         with self.lock:
@@ -181,10 +220,12 @@ class Engine:
         try:
             source.capture(output, duration, on_started=started, context={
                 "recording_id": rid, "session_id": session["id"], "label": rec["label"],
-                "subject": session["subject"], "articulation": articulation, "notes": notes})
+                "subject": session["subject"], "articulation": articulation, "notes": notes}, stop_event=rec["_stop"])
             with self.lock:
+                if rec["_cancel"].is_set():
+                    raise CaptureCancelled("Capture cancelled; raw diagnostics retained")
                 self.record_results[rid]["status"] = "processing"
-            meta = import_capture(self.store, output, session, rec["label"], articulation, notes, rid)
+            meta = import_capture(self.store, output, session, rec["label"], articulation, notes, rid, self.collection_fields(rec))
             arr = self.store.load_signal(session["id"], meta["id"])
             with self.lock:
                 self.ring.clear()
@@ -210,26 +251,35 @@ class Engine:
                 self.recording = None
 
     def _finish_record(self, rid, duration, articulation, notes):
-        time.sleep(duration)
         with self.lock:
             rec = self.recording
-            items = rec["items"]
-            session = self.session
+        rec["_stop"].wait(duration)
+        if rec.get("collection") and not rec["_cancel"].is_set():
+            with self.lock:
+                self.record_results[rid]["status"] = "processing"
+            rec["_cancel"].wait(.25)
+        with self.lock:
+            items, session = rec["items"], self.session
             self.recording = None
             if self.source and self.source.synthetic:
                 self.source.label = "rest"
             result = self.record_results[rid]
             try:
+                if rec["_cancel"].is_set():
+                    result.update(status="cancelled")
+                    return
                 if self.status == "error":
                     raise ValueError(self.error)
-                if len(items) < max(8, self.profile.frame_hz * duration * 0.7):
+                elapsed = (time.monotonic_ns()-rec["started_ns"])/1e9
+                if len(items) < max(8, self.profile.frame_hz * min(duration, elapsed) * 0.7):
                     raise ValueError("Too few frames: incomplete trial; no training sample saved")
                 meta = self.store.save_trial(session["id"], rec["label"], [x["t"] for x in items],
                     [x["iq"] for x in items], [x["number"] for x in items], [x["raw"] for x in items],
                     {"articulation": articulation, "notes": notes, "recording_id": rid,
                      "server_monotonic_start_ns": rec["started_ns"], "source": session["source"],
-                     "synthetic": session["synthetic"]})
+                     "synthetic": session["synthetic"], **self.collection_fields(rec)})
                 result.update(status="complete", trial=meta)
+                self.last_trial = {"session_id": session["id"], "trial_id": meta["id"]}
             except Exception as exc:
                 result.update(status="failed", error=str(exc))
 
@@ -253,7 +303,7 @@ class Engine:
                      "packet_age_s": age, "tlv_types": sorted(self.tlv_types),
                      "complex_available": not is_dca and bool(self.ring) and (now-self.ring[-1]["t"]) < 2e9,
                      "session": self.session,
-                     "recording": {k: v for k, v in self.recording.items() if k != "items"} if self.recording else None,
+                     "recording": {k: v for k, v in self.recording.items() if k != "items" and not k.startswith("_")} if self.recording else None,
                      "profile": self.profile.summary() if self.profile else None}
             if self.ring:
                 recent = list(self.ring)[-160:]

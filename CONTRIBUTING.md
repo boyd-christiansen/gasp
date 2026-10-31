@@ -9,3 +9,17 @@ Do not commit recordings, reference media, trained pickle/joblib models, credent
 The default dataset and models stay local under ignored `data/`. Manual browser QA can use `python tests/preview_dca.py`; its generated data belongs under ignored `test-data/`. The production app has no emulator injection switch.
 
 The CAD rebuild procedure and dependency versions live in `enclosure/iwr6843aop/README.md`. Keep exported geometry, renders and fit reports consistent when modifying that design. The enclosure is currently a standalone USB prototype; do not assume it accepts a closed DCA/carrier stack.
+
+## Mac app
+
+The training workspace is `subvocal/static/training.*`; `macos/Sources` provides the native shell, modifier gesture, recording overlay and timestamped optional audio. `macos/backend.py` is the frozen worker entry point. Keep transcription disabled in this first release and preserve original prompts independently of reviewed transcripts.
+
+On Mac, install the pinned `macos-build` extra, run `scripts/build-macos.sh`, and verify the packaged worker with:
+
+```sh
+.venv/bin/python tests/smoke_bundle.py dist/Subvocal.app
+swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/subvocal-gesture-tests
+/tmp/subvocal-gesture-tests
+```
+
+Do not claim microphone, global shortcut or physical radar validation from emulators or gesture fixtures. Keep private reference media and training data outside commits. See [the app guide](docs/MAC_APP.md).

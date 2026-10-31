@@ -1,5 +1,11 @@
 # Research roadmap
 
+## Training-first installed Mac app (0.2)
+
+Implemented: native Mac shell with bundled runtime, menu bar, recording overlay, configurable double-tap gesture, optional timestamped WAV audio, calibration/phrase/sentence decks, persistent visit plans, explicit human review, voiced/silent pairing and mode filtering, reserved dataset roles, and local phrase baseline training. Transcription and text insertion stay disabled. See [Mac app guide](MAC_APP.md).
+
+The global listener still needs interactive permission-granted verification; real microphone timing and physical radar validation remain pending. Calibration currently records personal references and coverage exercises; automatic face gating or model adaptation is not implemented.
+
 ## Working software
 
 - Mac-first USB complex heatmap and native DCA1000 raw ADC acquisition.
@@ -19,8 +25,8 @@ Software fixtures and emulators validate these paths. Physical radar, enclosure 
 
 ## Data collection and models
 
-- Add pre/post-roll, separate prompt and confirmed transcript fields, and reviewed utterance boundaries.
-- Prevent unintended pooling of silent, whispered, voiced and exaggerated articulation. Keep rest and natural movement negatives separate from spoken text labels.
+- Implemented in collection: USB pre/post-roll, separate prompt and human-confirmed transcript, and optional reviewed utterance boundaries. Next: validate timing and add assisted boundary review.
+- Implemented: select one speech mode per baseline; rest and movement negatives retain separate labels. Next: measure transfer between voiced and silent data without pooling their evaluation.
 - Start with a small randomized phrase vocabulary across real acquisition visits. Reserve validation and final test visits before tuning.
 - Measure false activations during normal desk use, not just closed-set accuracy on prompted takes. Add duration/energy baselines and learning curves.
 - Compare the current baseline with a temporal encoder using selected or beamformed channels. The collector retains all channels; the current feature baseline uses a fixed subset.

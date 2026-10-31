@@ -48,7 +48,16 @@ def model_scores(model, x):
     return np.exp(log_scores-logsumexp(log_scores, axis=1, keepdims=True))
 
 
-def train(store, session_ids, test_session_ids, spec=None):
+def reviewed_signal(store, sid, tid, trial):
+    arr = store.load_signal(sid, tid)
+    if "utterance_start_s" in trial or "utterance_end_s" in trial:
+        relative = (arr["timestamps_ns"]-arr["timestamps_ns"][0])/1e9
+        keep = (relative >= trial.get("utterance_start_s", 0)) & (relative <= trial.get("utterance_end_s", trial["duration_s"]))
+        arr = {k: v[keep] for k, v in arr.items()}
+    return arr
+
+
+def train(store, session_ids, test_session_ids, spec=None, articulation=None):
     spec = spec or FeatureSpec()
     session_ids, test_session_ids = list(dict.fromkeys(session_ids)), list(dict.fromkeys(test_session_ids))
     if len(session_ids) < 2 or not test_session_ids or not set(test_session_ids) < set(session_ids):
@@ -57,12 +66,27 @@ def train(store, session_ids, test_session_ids, spec=None):
     provenance = {(s["synthetic"], s["subject"], s["profile"]["sha256"], s["source"]) for s in sessions}
     if len(provenance) != 1:
         raise ValueError("Use the same subject, source and radar profile; never mix simulator and hardware data")
+    for session in sessions:
+        role = session.get("collection", {}).get("visit_role")
+        if role == "calibration" and session["id"] in test_session_ids:
+            raise ValueError("Calibration visits cannot be held-out evaluation data")
+        if role in {"validation", "test"} and session["id"] not in test_session_ids:
+            raise ValueError("Reserved validation/test visits cannot be used for fitting")
+    modes = {t.get("articulation", "silent") for s in sessions for t in store.trials(s["id"])
+             if t.get("accepted", True) and t.get("articulation", "silent") in {"silent", "voiced", "whisper"}}
+    if articulation is None and len(modes) > 1:
+        raise ValueError("Select one articulation mode; voiced, whispered and silent takes cannot be pooled")
+    articulation = articulation or next(iter(modes), "silent")
     rows, xs, labels, groups = [], [], [], []
     channel_shapes = set()
     rejected = []
     for session in sessions:
         for trial in store.trials(session["id"]):
             if not trial.get("accepted", True):
+                continue
+            if trial.get("articulation", "silent") not in {articulation, "rest", "negative"}:
+                continue
+            if trial.get("collection_protocol") and trial.get("review_status") != "verified":
                 continue
             problem = trial_quality_error(trial)
             if problem:
@@ -72,7 +96,7 @@ def train(store, session_ids, test_session_ids, spec=None):
             digest = hashlib.sha256(signal_path.read_bytes()).hexdigest()
             if digest != trial["sha256"]:
                 raise ValueError(f"Trial checksum mismatch: {trial['id']}")
-            arr = store.load_signal(session["id"], trial["id"])
+            arr = reviewed_signal(store, session["id"], trial["id"], trial)
             try:
                 x = features(arr["iq"], arr["timestamps_ns"], session["profile"]["range_step_m"], spec)
             except ValueError as exc:
@@ -83,7 +107,10 @@ def train(store, session_ids, test_session_ids, spec=None):
             groups.append(session["id"])
             channel_shapes.add(tuple(arr["iq"].shape[1:]))
             rows.append({"session": session["id"], "trial": trial["id"], "label": trial["label"],
-                         "sha256": digest, "split": "test" if session["id"] in test_session_ids else "train"})
+                         "sha256": digest, "articulation": trial.get("articulation", "silent"),
+                         "utterance_start_s": trial.get("utterance_start_s"), "utterance_end_s": trial.get("utterance_end_s"),
+                         "collection_protocol": trial.get("collection_protocol"),
+                         "split": "test" if session["id"] in test_session_ids else "train"})
     if len(channel_shapes) != 1:
         raise ValueError("All trials must have the same range/antenna layout")
     x, y = np.asarray(xs, dtype=np.float64), np.asarray(labels)
@@ -105,7 +132,7 @@ def train(store, session_ids, test_session_ids, spec=None):
     folder.mkdir()
     report = {"schema": 1, "id": mid, "created_ns": time.time_ns(), "algorithm": "scaled-logistic-baseline-v1",
               "synthetic": sessions[0]["synthetic"], "subject": sessions[0]["subject"],
-              "source": sessions[0]["source"], "profile_sha256": sessions[0]["profile"]["sha256"],
+              "source": sessions[0]["source"], "articulation": articulation, "profile_sha256": sessions[0]["profile"]["sha256"],
               "profile_range_step_m": sessions[0]["profile"]["range_step_m"],
               "signal_shape": list(next(iter(channel_shapes))), "feature_spec": spec.to_dict(),
               "session_ids": session_ids, "test_session_ids": test_session_ids,
@@ -152,7 +179,7 @@ def predict_trial(store, model_id, session_id, trial_id, threshold=0.65):
     digest = hashlib.sha256((path/"radar.npz").read_bytes()).hexdigest()
     if digest != trial["sha256"]:
         raise ValueError(f"Trial checksum mismatch: {trial_id}")
-    arr = store.load_signal(session_id, trial_id)
+    arr = reviewed_signal(store, session_id, trial_id, trial)
     # Labels, prompts and reference media are never passed to the model.
     result = predict(store, model_id, arr["iq"], arr["timestamps_ns"], session, threshold)
     report = json.loads((store.root/"models"/checked_id(model_id)/"report.json").read_text())
