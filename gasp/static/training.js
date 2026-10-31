@@ -26,7 +26,7 @@ let offsetMs = 0,
   browserAudio = null,
   browserBlob = null,
   browserAudioStart = 0;
-const native = !!window.webkit?.messageHandlers?.subvocal,
+const native = !!window.webkit?.messageHandlers?.gasp,
   replies = new Map();
 window.nativeReply = (id, result, error) => {
   const p = replies.get(id);
@@ -47,7 +47,7 @@ function bridge(action, data = {}) {
       reject(new Error("The Mac app did not respond."));
     }, 60000);
     replies.set(id, { resolve, reject, timer });
-    window.webkit.messageHandlers.subvocal.postMessage({ id, action, ...data });
+    window.webkit.messageHandlers.gasp.postMessage({ id, action, ...data });
   });
 }
 async function api(path, method = "GET", body) {
@@ -349,7 +349,7 @@ function deckChanged() {
 }
 $("deck").onchange = deckChanged;
 $("subject").onchange = () => {
-  localStorage.setItem("subvocal.subject", $("subject").value);
+  localStorage.setItem("gasp.subject", $("subject").value);
   refreshVisits().catch(() => {});
 };
 $("visitForm").onsubmit = async (e) => {
@@ -588,10 +588,10 @@ act("recordButton", toggleRecording);
 act("cancelButton", async () => {
   if (activeRecord) await api("record/" + activeRecord.id + "/cancel", "POST");
 });
-window.addEventListener("subvocal-toggle", () =>
+window.addEventListener("gasp-toggle", () =>
   toggleRecording().catch((e) => notice(e.message, true)),
 );
-window.addEventListener("subvocal-cancel", () => {
+window.addEventListener("gasp-cancel", () => {
   if (activeRecord)
     api("record/" + activeRecord.id + "/cancel", "POST").catch((e) =>
       notice(e.message, true),
@@ -787,7 +787,7 @@ async function init() {
     .map((d) => `<option value="${d.id}">${escapeHTML(d.name)}</option>`)
     .join("");
   deckChanged();
-  $("subject").value = localStorage.getItem("subvocal.subject") || "Boyd";
+  $("subject").value = localStorage.getItem("gasp.subject") || "Boyd";
   $("sessionName").value =
     "Visit · " +
     new Date().toLocaleString([], {

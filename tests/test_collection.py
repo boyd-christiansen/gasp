@@ -2,11 +2,11 @@ import time
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from subvocal.collection import make_plan
-from subvocal.server import create_app
-from subvocal.cli import seed_demo
-from subvocal.storage import Store
-from subvocal.training import train
+from gasp.collection import make_plan
+from gasp.server import create_app
+from gasp.cli import seed_demo
+from gasp.storage import Store
+from gasp.training import train
 
 
 def wait_for(client, rid):
@@ -88,7 +88,7 @@ def test_articulation_and_reserved_visit_guards(tmp_path):
         train(store,ids,[ids[-1]])
     # Filtering a mixed visit removes voiced samples rather than using them as silent labels.
     store.add_trial_fields(ids[0],t['id'],{'articulation':'silent'})
-    s = store.session(ids[0]); from subvocal.storage import atomic_json
+    s = store.session(ids[0]); from gasp.storage import atomic_json
     s['collection'] = {'visit_role':'test'}; atomic_json(store.session_dir(s['id'])/'session.json',s)
     with pytest.raises(ValueError,match='cannot be used for fitting'):
         train(store,ids,[ids[-1]],articulation='silent')
@@ -108,7 +108,7 @@ def test_installed_app_requires_launch_token(tmp_path):
 
 
 def test_reviewed_schema_training_filters_modes_and_preserves_trim(tmp_path):
-    from subvocal.training import reviewed_signal, predict_trial
+    from gasp.training import reviewed_signal, predict_trial
     store = Store(tmp_path); ids = seed_demo(store,sessions=2,repetitions=2)
     for sid in ids:
         originals = store.trials(sid)

@@ -1,4 +1,4 @@
-# Subvocal Training Studio · first Mac app
+# Gasp Training Studio · first Mac app
 
 This release collects and reviews personal radar training data. It is an installed macOS application with a menu bar, a small non-activating recording overlay, and a bundled local capture engine. It needs no Terminal window, cloud account, Python installation, API key, or transcription model to run.
 
@@ -6,7 +6,7 @@ This release collects and reviews personal radar training data. It is an install
 
 ## Start collecting
 
-1. Open **Subvocal** in your user Applications folder (`~/Applications/Subvocal.app`).
+1. Open **Gasp** in your user Applications folder (`~/Applications/Gasp.app`).
 2. In **Session setup**, connect the **Simulator** to practice. Its waveforms and all derived results are clearly marked synthetic and cannot establish speech-recognition accuracy.
 3. Create a **Personal calibration** visit with your participant name, distance, posture and room notes. Choose paired voiced/silent collection or a single mode. Movement and rest checks have their own labels.
 4. Optionally enable reference audio. macOS asks for microphone access at that point. Audio is saved locally with each take; it is never transcribed.
@@ -38,7 +38,7 @@ Whole-utterance confirmed text is the initial supervision. Optional reviewed sta
 
 ## Local files and schema
 
-Installed-app data is under `~/Library/Application Support/Desktop Subvocal/Recordings`. The menu item **Show local recordings** opens it. Logs are in the neighboring `Logs` folder. The source workbench's existing `data/` directory remains separate; data is not copied or uploaded automatically. Source files and recordings are independent of the installed app, so rebuilding it preserves visits.
+Installed-app data is under `~/Library/Application Support/Gasp/Recordings`. The menu item **Show local recordings** opens it. Logs are in the neighboring `Logs` folder. The source workbench's existing `data/` directory remains separate; data is not copied or uploaded automatically. Source files and recordings are independent of the installed app, so rebuilding it preserves visits.
 
 Schema 2 adds an immutable original prompt and target, confirmed verbatim text, review status/provenance, articulation, plan step/pair IDs, calibration reference, placement, dataset role, capture events and optional trim boundaries. ASR and output-text fields remain null. New takes are pending and excluded until human approval. Editing text or trim points without re-approving invalidates approval. Legacy schema 1 records still load and retain their historical acceptance; new review gates cannot retroactively establish their labels.
 
@@ -54,7 +54,7 @@ uv sync --frozen --extra dev --extra macos-build
 ./scripts/install-macos.sh
 ```
 
-The build freezes the capture engine, compiles the AppKit/WebKit/SwiftUI shell with `swiftc`, includes dependency license notices, and applies an ad-hoc signature. It outputs `dist/Subvocal.app`. The app has been built and exercised on Apple Silicon macOS 26; other OS/hardware combinations are unverified. The native shell declares macOS 13 as its minimum, but that is not an end-to-end compatibility guarantee for every bundled library.
+The build freezes the capture engine, compiles the AppKit/WebKit/SwiftUI shell with `swiftc`, includes dependency license notices, and applies an ad-hoc signature. It outputs `dist/Gasp.app`. The app has been built and exercised on Apple Silicon macOS 26; other OS/hardware combinations are unverified. The native shell declares macOS 13 as its minimum, but that is not an end-to-end compatibility guarantee for every bundled library.
 
 This development build is **not Developer ID signed or notarized**. Distribution to other Macs needs the normal signing/notarization work. This repository does not disable Gatekeeper or security settings.
 

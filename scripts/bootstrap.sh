@@ -8,4 +8,4 @@ else
   python3 -m venv .venv
   .venv/bin/python -m pip install -e '.[dev]'
 fi
-echo 'Ready. Run ./scripts/run.sh or double-click Start Subvocal.command.'
+echo 'Ready. Run ./scripts/run.sh or double-click Start Gasp.command.'

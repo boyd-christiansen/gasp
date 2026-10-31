@@ -1,5 +1,5 @@
-#ifndef SUBVOCAL_PHASE_ROI_H
-#define SUBVOCAL_PHASE_ROI_H
+#ifndef GASP_PHASE_ROI_H
+#define GASP_PHASE_ROI_H
 #include <stdint.h>
 #include <stddef.h>
 

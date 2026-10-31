@@ -103,7 +103,7 @@ class PredictTrialInput(BaseModel):
 
 
 def create_app(data_root=None, research_enabled=False, app_token=None):
-    store = Store(data_root or os.environ.get("SUBVOCAL_DATA", "data"))
+    store = Store(data_root or os.environ.get("GASP_DATA", "data"))
     engine = Engine(store)
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="baseline-training")
 
@@ -113,7 +113,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         engine.close()
         pool.shutdown(wait=True)
 
-    app = FastAPI(title="Desktop Subvocal", lifespan=lifespan)
+    app = FastAPI(title="Gasp", lifespan=lifespan)
     app.state.store, app.state.engine = store, engine
     app.state.research_enabled = research_enabled
 
@@ -126,9 +126,9 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         if origin and origin not in {f"http://{request.headers.get('host')}", "http://testserver"}:
             return JSONResponse({"detail": "Cross-origin access rejected"}, status_code=403)
         if app_token and request.url.path != "/desktop":
-            supplied = request.cookies.get("subvocal_app", "") or request.headers.get("authorization", "").removeprefix("Bearer ")
+            supplied = request.cookies.get("gasp_app", "") or request.headers.get("authorization", "").removeprefix("Bearer ")
             if not hmac.compare_digest(supplied, app_token):
-                return JSONResponse({"detail": "Open the installed Subvocal app"}, status_code=403)
+                return JSONResponse({"detail": "Open the installed Gasp app"}, status_code=403)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"
@@ -156,7 +156,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         if not app_token or not hmac.compare_digest(token, app_token):
             raise HTTPException(403, "Invalid app session")
         response = RedirectResponse("/training", status_code=303)
-        response.set_cookie("subvocal_app", app_token, httponly=True, samesite="strict")
+        response.set_cookie("gasp_app", app_token, httponly=True, samesite="strict")
         return response
 
     @app.get("/api/decks")
@@ -167,7 +167,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.2.0", "data_root": str(store.root),
+        return {"ok": True, "version": "0.2.1", "data_root": str(store.root),
                 "hardware_verified": False, "transcription_enabled": False, "research_predictions_enabled": research_enabled, "server_monotonic_ns": time.monotonic_ns()}
 
     @app.get("/api/clock")

@@ -24,7 +24,7 @@ final class AudioReference {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw failure("No microphone input is available.") }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("subvocal-audio-\(UUID().uuidString).wav")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("gasp-audio-\(UUID().uuidString).wav")
         let settings: [String: Any] = [AVFormatIDKey:kAudioFormatLinearPCM, AVSampleRateKey:format.sampleRate,
             AVNumberOfChannelsKey:format.channelCount, AVLinearPCMBitDepthKey:32,
             AVLinearPCMIsFloatKey:true, AVLinearPCMIsNonInterleaved:false]
@@ -71,7 +71,7 @@ final class AudioReference {
     }
     func discard() { stop(); if let url = location { try? FileManager.default.removeItem(at:url) }; location = nil }
 }
-func failure(_ message: String) -> NSError { NSError(domain:"DesktopSubvocal",code:1,userInfo:[NSLocalizedDescriptionKey:message]) }
+func failure(_ message: String) -> NSError { NSError(domain:"Gasp",code:1,userInfo:[NSLocalizedDescriptionKey:message]) }
 
 final class OverlayState: ObservableObject {
     @Published var title = "Ready to collect"
@@ -115,7 +115,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var support: URL!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        support = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Desktop Subvocal",isDirectory:true)
+        support = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Gasp",isDirectory:true)
         do { try FileManager.default.createDirectory(at:support,withIntermediateDirectories:true) }
         catch { fatalAlert(error.localizedDescription); return }
         gesture.keyCode = UInt16(UserDefaults.standard.integer(forKey:"recordingKey").nonzero ?? 61)
@@ -124,22 +124,22 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         do { try startWorker() } catch { fatalAlert(error.localizedDescription) }
     }
     func makeWindow() {
-        let content = WKUserContentController(); content.add(self,name:"subvocal")
+        let content = WKUserContentController(); content.add(self,name:"gasp")
         let configuration = WKWebViewConfiguration(); configuration.userContentController = content
         web = WKWebView(frame:.zero,configuration:configuration); web.navigationDelegate = self
         web.setValue(false,forKey:"drawsBackground")
         window = NSWindow(contentRect:NSRect(x:0,y:0,width:1230,height:870),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
-        window.title = "Subvocal · Training Studio"; window.titlebarAppearsTransparent = true
+        window.title = "Gasp · Training Studio"; window.titlebarAppearsTransparent = true
         window.backgroundColor = NSColor(calibratedRed:0.969,green:0.973,blue:0.957,alpha:1)
         window.appearance = NSAppearance(named:.aqua)
         window.minSize = NSSize(width:860,height:650); window.contentView = web
         window.center(); window.setFrameAutosaveName("TrainingStudio"); window.makeKeyAndOrderFront(nil)
-        web.loadHTMLString("<body style='font:16px -apple-system;background:#f7f8f4;color:#204b3e;padding:80px'><h1>subvocal</h1><p>Starting your local training studio…</p></body>",baseURL:nil)
+        web.loadHTMLString("<body style='font:16px -apple-system;background:#f7f8f4;color:#204b3e;padding:80px'><h1>gasp</h1><p>Starting your local training studio…</p></body>",baseURL:nil)
         NSApp.activate(ignoringOtherApps:true)
     }
     func makeMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName:"waveform",accessibilityDescription:"Subvocal training")
+        statusItem.button?.image = NSImage(systemSymbolName:"waveform",accessibilityDescription:"Gasp training")
         let menu = NSMenu()
         menu.addItem(withTitle:"Open Training Studio",action:#selector(showWindow),keyEquivalent:"").target = self
         menu.addItem(withTitle:"Record / finish take",action:#selector(toggle),keyEquivalent:"").target = self
@@ -147,7 +147,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         menu.addItem(.separator())
         menu.addItem(withTitle:"Show local recordings",action:#selector(showData),keyEquivalent:"").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle:"Quit Subvocal",action:#selector(quit),keyEquivalent:"q").target = self
+        menu.addItem(withTitle:"Quit Gasp",action:#selector(quit),keyEquivalent:"q").target = self
         statusItem.menu = menu
         let appMenu = NSMenu(); let root = NSMenuItem(); root.submenu = menu; appMenu.addItem(root)
         let editRoot = NSMenuItem(title:"Edit",action:nil,keyEquivalent:""); let edit = NSMenu(title:"Edit")
@@ -163,17 +163,17 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
     func startWorker() throws {
         guard let resource = Bundle.main.resourceURL else { throw failure("App resources are missing.") }
-        let executable = resource.appendingPathComponent("capture/subvocal-capture")
+        let executable = resource.appendingPathComponent("capture/gasp-capture")
         guard FileManager.default.isExecutableFile(atPath:executable.path) else { throw failure("The bundled capture engine is missing. Rebuild the app.") }
         let logs = support.appendingPathComponent("Logs",isDirectory:true)
         try FileManager.default.createDirectory(at:logs,withIntermediateDirectories:true)
         let logURL = logs.appendingPathComponent("capture.log")
         if !FileManager.default.fileExists(atPath:logURL.path) { FileManager.default.createFile(atPath:logURL.path,contents:nil) }
         workerLog = try FileHandle(forWritingTo:logURL); try workerLog?.truncate(atOffset:0)
-        readyFile = FileManager.default.temporaryDirectory.appendingPathComponent("subvocal-ready-\(UUID().uuidString).json")
+        readyFile = FileManager.default.temporaryDirectory.appendingPathComponent("gasp-ready-\(UUID().uuidString).json")
         let process = Process(); process.executableURL = executable
         process.arguments = ["--data",support.appendingPathComponent("Recordings").path,"--ready-file",readyFile.path]
-        var env = ProcessInfo.processInfo.environment; env["SUBVOCAL_APP_TOKEN"] = token
+        var env = ProcessInfo.processInfo.environment; env["GASP_APP_TOKEN"] = token
         env["PYTHONNOUSERSITE"] = "1"; process.environment = env
         process.standardOutput = workerLog; process.standardError = workerLog
         process.terminationHandler = { [weak self] _ in DispatchQueue.main.async {
@@ -188,7 +188,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if let data = try? Data(contentsOf:readyFile),let ready = try? JSONSerialization.jsonObject(with:data) as? [String:Any],let port = ready["port"] as? Int {
             startupTimer?.invalidate(); baseURL = URL(string:"http://127.0.0.1:\(port)")!
             web.load(URLRequest(url:URL(string:"/desktop?token=\(token)",relativeTo:baseURL)!.absoluteURL))
-        } else if startupChecks > 150 { startupTimer?.invalidate(); fatalAlert("The local capture engine did not become ready. Check the capture log in Application Support/Desktop Subvocal/Logs.") }
+        } else if startupChecks > 150 { startupTimer?.invalidate(); fatalAlert("The local capture engine did not become ready. Check the capture log in Application Support/Gasp/Logs.") }
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy)->Void) {
         if let url = navigationAction.request.url, url.scheme == "about" || (url.host == "127.0.0.1" && url.port == baseURL?.port) { decisionHandler(.allow) }
@@ -205,11 +205,11 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 case "info": result = ["keyCode":Int(gesture.keyCode),"shortcutEnabled":eventTap != nil,"shortcutMessage":eventTap != nil ? "Input Monitoring is available. The shortcut works across apps." : "Enable Input Monitoring to use the shortcut across apps. On-screen capture works now."]
                 case "enableShortcut":
                     setKey(body); startMonitor(request:true)
-                    result = ["enabled":eventTap != nil,"message":eventTap != nil ? "Shortcut enabled. Double-tap to start; tap once to finish. Escape cancels." : "Allow Subvocal in System Settings → Privacy & Security → Input Monitoring, then click Enable again."]
+                    result = ["enabled":eventTap != nil,"message":eventTap != nil ? "Shortcut enabled. Double-tap to start; tap once to finish. Escape cancels." : "Allow Gasp in System Settings → Privacy & Security → Input Monitoring, then click Enable again."]
                 case "setShortcut": setKey(body)
                 case "audioPermission":
                     let allowed = await AVCaptureDevice.requestAccess(for:.audio)
-                    if !allowed { throw failure("Allow Subvocal in System Settings → Privacy & Security → Microphone.") }
+                    if !allowed { throw failure("Allow Gasp in System Settings → Privacy & Security → Microphone.") }
                 case "audioStart": try audio.start()
                 case "audioStop": audio.stop()
                 case "audioDiscard": audio.discard()
@@ -271,8 +271,8 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if gesture.modifier(code:code,down:event.flags.contains(mask),time:Double(event.timestamp)/1e9,recording:recording) { toggle() }
     }
     @objc func showWindow() { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps:true) }
-    @objc func toggle() { web.evaluateJavaScript("window.dispatchEvent(new Event('subvocal-toggle'))",completionHandler:nil) }
-    @objc func cancel() { web.evaluateJavaScript("window.dispatchEvent(new Event('subvocal-cancel'))",completionHandler:nil) }
+    @objc func toggle() { web.evaluateJavaScript("window.dispatchEvent(new Event('gasp-toggle'))",completionHandler:nil) }
+    @objc func cancel() { web.evaluateJavaScript("window.dispatchEvent(new Event('gasp-cancel'))",completionHandler:nil) }
     @objc func showData() { NSWorkspace.shared.open(support.appendingPathComponent("Recordings")) }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool { showWindow(); return true }
@@ -286,7 +286,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         DispatchQueue.global().async { process.waitUntilExit(); DispatchQueue.main.async { NSApp.reply(toApplicationShouldTerminate:true) } }
         return .terminateLater
     }
-    func fatalAlert(_ text:String) { let alert = NSAlert(); alert.messageText = "Subvocal needs attention"; alert.informativeText = text; alert.runModal() }
+    func fatalAlert(_ text:String) { let alert = NSAlert(); alert.messageText = "Gasp needs attention"; alert.informativeText = text; alert.runModal() }
 }
 extension Int { var nonzero: Int? { self == 0 ? nil : self } }
 let application = NSApplication.shared

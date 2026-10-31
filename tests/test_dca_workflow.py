@@ -3,11 +3,11 @@ import time
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from subvocal import dca
-from subvocal.server import create_app
-from subvocal.profile import bundled_profile
-from subvocal.storage import Store, atomic_json
-from subvocal.training import train
+from gasp import dca
+from gasp.server import create_app
+from gasp.profile import bundled_profile
+from gasp.storage import Store, atomic_json
+from gasp.training import train
 from dca_emulator import DCAEmulator
 
 

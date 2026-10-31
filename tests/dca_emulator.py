@@ -11,8 +11,8 @@ import struct
 import threading
 import time
 import numpy as np
-from subvocal import dca
-from subvocal.profile import bundled_profile
+from gasp import dca
+from gasp.profile import bundled_profile
 
 
 class DCAEmulator:

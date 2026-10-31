@@ -3,7 +3,7 @@
 ## USB first
 
 1. Identify the physical board revision and installed firmware. The target is **IWR6843AOP ES2 with SDK 3.x OOB AOP firmware**, not IWRL6843 and not a People Counting/vital-sign binary. TI renamed some older AOP example directories between releases; select by device/antenna/revision, not directory spelling alone.
-2. Connect its onboard USB-to-UART bridge using a data-capable cable. Run `.venv/bin/python -m subvocal doctor`. Normally two serial endpoints appear. Prefer `/dev/cu.*` on macOS. If neither appears, check cable, bridge driver and board USB routing. [Silicon Labs VCP drivers](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers) may be needed for the CP2105 bridge. Install the matching official macOS driver yourself if required by the OS.
+2. Connect its onboard USB-to-UART bridge using a data-capable cable. Run `.venv/bin/python -m gasp doctor`. Normally two serial endpoints appear. Prefer `/dev/cu.*` on macOS. If neither appears, check cable, bridge driver and board USB routing. [Silicon Labs VCP drivers](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers) may be needed for the CP2105 bridge. Install the matching official macOS driver yourself if required by the OS.
 3. Determine which endpoint is the CLI and which is binary data. Documentation differs across EVM generations; do not blindly map the lower port number, Enhanced/Standard wording, or suffix to a role. The app lists USB metadata and makes you choose explicitly. Default CLI is 115200; data is 921600.
 4. Put the board in normal functional mode, with USB UART routing appropriate to its revision. Use the matching TI hardware guide for switch positions. Do not copy switch settings from a different revision.
 5. Launch the workbench, select **USB serial** and **USB phase 10 Hz**, choose the two ports, inspect the config, then connect. Configuration halts on the first rejected or unacknowledged command. The reported error includes the offending command.
@@ -47,7 +47,7 @@ DCA supports prompted recordings, training/evaluation, and prediction of complet
 4. Capture a short labelled utterance:
 
 ```sh
-.venv/bin/python -m subvocal dca-record \
+.venv/bin/python -m gasp dca-record \
   --cli-port /dev/cu.YOUR_COMMAND_PORT \
   --output data/raw/visit-01/add-note-001 --seconds 5
 ```
@@ -58,7 +58,7 @@ The Python driver sends FPGA/configuration/record commands over UDP 4096 and rec
 6. Validate the layout using a simple known reflector/range target first. Then import:
 
 ```sh
-.venv/bin/python -m subvocal dca-import data/raw/visit-01/add-note-001 \
+.venv/bin/python -m gasp dca-import data/raw/visit-01/add-note-001 \
   --label 'add a note' --subject Boyd --confirm-layout
 ```
 

@@ -6,7 +6,7 @@ IPv4 addresses. Never interpret its hardware-shaped fixture as a speech result.
 from pathlib import Path
 import uvicorn
 from dca_emulator import DCAEmulator
-from subvocal import dca, server
+from gasp import dca, server
 
 if __name__ == '__main__':
     peer = DCAEmulator().start()

@@ -12,14 +12,14 @@ The CAD rebuild procedure and dependency versions live in `enclosure/iwr6843aop/
 
 ## Mac app
 
-The training workspace is `subvocal/static/training.*`; `macos/Sources` provides the native shell, modifier gesture, recording overlay and timestamped optional audio. `macos/backend.py` is the frozen worker entry point. Keep transcription disabled in this first release and preserve original prompts independently of reviewed transcripts.
+The training workspace is `gasp/static/training.*`; `macos/Sources` provides the native shell, modifier gesture, recording overlay and timestamped optional audio. `macos/backend.py` is the frozen worker entry point. Keep transcription disabled in this first release and preserve original prompts independently of reviewed transcripts.
 
 On Mac, install the pinned `macos-build` extra, run `scripts/build-macos.sh`, and verify the packaged worker with:
 
 ```sh
-.venv/bin/python tests/smoke_bundle.py dist/Subvocal.app
-swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/subvocal-gesture-tests
-/tmp/subvocal-gesture-tests
+.venv/bin/python tests/smoke_bundle.py dist/Gasp.app
+swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/gasp-gesture-tests
+/tmp/gasp-gesture-tests
 ```
 
 Do not claim microphone, global shortcut or physical radar validation from emulators or gesture fixtures. Keep private reference media and training data outside commits. See [the app guide](docs/MAC_APP.md).

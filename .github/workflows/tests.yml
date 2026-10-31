@@ -30,8 +30,8 @@ jobs:
       - if: runner.os == 'macOS'
         run: |
           uv sync --frozen --extra dev --extra macos-build
-          swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/subvocal-gesture-tests
-          /tmp/subvocal-gesture-tests
+          swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/gasp-gesture-tests
+          /tmp/gasp-gesture-tests
           ./scripts/build-macos.sh
-          codesign --verify --deep --strict dist/Subvocal.app
-          .venv/bin/python tests/smoke_bundle.py dist/Subvocal.app
+          codesign --verify --deep --strict dist/Gasp.app
+          .venv/bin/python tests/smoke_bundle.py dist/Gasp.app

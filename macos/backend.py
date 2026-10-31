@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import socket
 import uvicorn
-from subvocal.server import create_app
+from gasp.server import create_app
 
 
 def main():
@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--data', required=True)
     parser.add_argument('--ready-file', required=True)
     args = parser.parse_args()
-    token = os.environ.get('SUBVOCAL_APP_TOKEN')
+    token = os.environ.get('GASP_APP_TOKEN')
     if not token or len(token) < 32:
         raise SystemExit('An app session token is required')
     app = create_app(args.data, app_token=token, research_enabled=False)

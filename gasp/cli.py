@@ -33,7 +33,7 @@ def seed_demo(store, sessions=3, repetitions=4):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Desktop Subvocal · local radar research")
+    parser = argparse.ArgumentParser(description="Gasp · local radar research")
     parser.add_argument("--data", default="data", help="Local dataset directory")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="Open local recording and training UI")
@@ -70,7 +70,7 @@ def main():
         if args.command == "serve":
             import uvicorn
             from .server import create_app
-            print(f"Desktop Subvocal: http://127.0.0.1:{args.port}")
+            print(f"Gasp: http://127.0.0.1:{args.port}")
             uvicorn.run(create_app(args.data, research_enabled=args.research), host="127.0.0.1", port=args.port, log_level="info", access_log=False)
             return
         if args.command == "doctor":

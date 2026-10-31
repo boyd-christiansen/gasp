@@ -1,5 +1,5 @@
 import pytest
-from subvocal.profile import bundled_profile, parse_profile
+from gasp.profile import bundled_profile, parse_profile
 
 
 def test_profiles_fit_transport():

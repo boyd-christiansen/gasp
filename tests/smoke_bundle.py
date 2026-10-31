@@ -1,6 +1,6 @@
 """Exercise the frozen capture worker without the source checkout or a venv.
 
-Usage: python tests/smoke_bundle.py dist/Subvocal.app
+Usage: python tests/smoke_bundle.py dist/Gasp.app
 All artifacts live in a temporary directory and use the labelled simulator.
 """
 import json
@@ -17,12 +17,12 @@ import uuid
 
 def main():
     app = Path(sys.argv[1]).resolve()
-    with tempfile.TemporaryDirectory(prefix='subvocal-bundle-smoke-') as folder:
+    with tempfile.TemporaryDirectory(prefix='gasp-bundle-smoke-') as folder:
         root = Path(folder)
         token = uuid.uuid4().hex + uuid.uuid4().hex
-        env = dict(os.environ, SUBVOCAL_APP_TOKEN=token, PYTHONNOUSERSITE='1')
+        env = dict(os.environ, GASP_APP_TOKEN=token, PYTHONNOUSERSITE='1')
         with (root/'worker.log').open('w+') as log:
-            process = subprocess.Popen([str(app/'Contents/Resources/capture/subvocal-capture'),
+            process = subprocess.Popen([str(app/'Contents/Resources/capture/gasp-capture'),
                 '--data', str(root/'data'), '--ready-file', str(root/'ready.json')],
                 cwd=root, env=env, stdout=log, stderr=log)
             try:

@@ -21,5 +21,4 @@ python_license = Path(sysconfig.get_path('stdlib')) / 'LICENSE.txt'
 if not python_license.is_file():
     raise SystemExit('Python runtime license not found; do not distribute this bundle')
 shutil.copy2(python_license, root / 'Python-LICENSE.txt')
-shutil.copy2('LICENSE', root / 'Desktop-Subvocal-LICENSE.txt')
-shutil.copy2('THIRD_PARTY_NOTICES.md', root / 'REFERENCES.md')
+shutil.copy2('LICENSE', root / 'Gasp-LICENSE.txt')

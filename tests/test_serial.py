@@ -4,9 +4,9 @@ import threading
 import time
 import numpy as np
 import pytest
-from subvocal.profile import bundled_profile, parse_profile
-from subvocal.transport import SerialSource
-from subvocal.protocol import encode_frame
+from gasp.profile import bundled_profile, parse_profile
+from gasp.transport import SerialSource
+from gasp.protocol import encode_frame
 
 
 def test_real_serial_io_with_emulated_ti_device():

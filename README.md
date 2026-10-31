@@ -1,8 +1,8 @@
-# Desktop Subvocal
+# Gasp
 
-An independent desktop radar research project inspired by [Subvocal](https://subvocal.company/preorder) and [Aarush Yadav's announcement](https://x.com/AarushYadav47/status/2116198463847408066). It pairs a local Mac workbench for **TI IWR6843AOPEVM** silent-speech experiments with a printable enclosure. This project is not affiliated with or endorsed by Subvocal or Texas Instruments.
+Gasp is a personal desktop radar research project. It pairs a local Mac workbench for **TI IWR6843AOPEVM** silent-speech experiments with a printable enclosure.
 
-**New: [Subvocal Training Studio for Mac](docs/MAC_APP.md)** — an installed, training-focused app with a menu bar, recording overlay, double-tap shortcut, personal calibration, resumable scripts, reference audio, explicit take approval and whole-visit baseline evaluation. **Transcription and text insertion are disabled.**
+**New: [Gasp Training Studio for Mac](docs/MAC_APP.md)** — an installed, training-focused app with a menu bar, recording overlay, double-tap shortcut, personal calibration, resumable scripts, reference audio, explicit take approval and whole-visit baseline evaluation. **Transcription and text insertion are disabled.**
 
 Capture complex radar signals over USB or raw ADC through **MMWAVEICBOOST + DCA1000EVM**, collect prompted trials with optional reference video/audio, review labels, train personal phrase models, and predict saved takes. Acquisition runs locally without TI's capture GUI, a cloud account, or an API key.
 
@@ -22,7 +22,7 @@ These are CAD renders of an unprinted Rev G prototype. **The current case suppor
 
 ## Installed Mac app
 
-The app bundles its capture engine and runtime. On this development Mac it is installed at `~/Applications/Subvocal.app`. Open **Subvocal**, choose **Session setup**, and practice with the clearly labelled simulator. Use **Personal calibration** first, then **First phrase experiment** across multiple visits. Recordings stay in Application Support and never enter this public repository.
+The app bundles its capture engine and runtime. On this development Mac it is installed at `~/Applications/Gasp.app`. Open **Gasp**, choose **Session setup**, and practice with the clearly labelled simulator. Use **Personal calibration** first, then **First phrase experiment** across multiple visits. Recordings stay in Application Support and never enter this public repository.
 
 To build your own Apple Silicon development app:
 
@@ -34,20 +34,20 @@ uv sync --frozen --extra dev --extra macos-build
 
 See the [Mac app guide](docs/MAC_APP.md) for recording controls, optional microphone/Input Monitoring permissions, data review, timing limits, and build/signing status. The development bundle is ad-hoc signed, not notarized.
 
-![Training Studio · simulator capture](docs/training-studio-preview.jpg)
+![Gasp Training Studio](docs/training-studio-preview.jpg)
 
 ## Source workbench
 
 Python 3.12 and [uv](https://docs.astral.sh/uv/) are recommended. On a fresh checkout:
 
 ```sh
-git clone https://github.com/boyd-christiansen/desktop-subvocal.git
-cd desktop-subvocal
+git clone https://github.com/boyd-christiansen/gasp.git
+cd gasp
 ./scripts/bootstrap.sh
 ./scripts/run.sh
 ```
 
-Double-click **[Start Subvocal.command](./Start%20Subvocal.command)**. Keep its Terminal window open while using the workbench. Stop with Control-C.
+Double-click **[Start Gasp.command](./Start%20Gasp.command)**. Keep its Terminal window open while using the workbench. Stop with Control-C.
 
 Or, from this directory:
 
@@ -70,7 +70,7 @@ Open **http://127.0.0.1:8765/training** for the training workspace, or the root 
 For an instant, bounded synthetic dataset:
 
 ```sh
-.venv/bin/python -m subvocal seed-demo
+.venv/bin/python -m gasp seed-demo
 ```
 
 This creates three clearly labelled synthetic sessions for participant `synthetic-fixture`, with three labels and four takes per label. Refresh the dataset page. To try one of those models on the live simulator, create a simulator session using that same participant and radar profile. Real and synthetic datasets/models cannot be mixed.
@@ -134,10 +134,10 @@ This is closed-vocabulary phrase classification, **not continuous dictation**. T
 ## CLI
 
 ```sh
-.venv/bin/python -m subvocal doctor
-.venv/bin/python -m subvocal profile usb-phase-10hz
-.venv/bin/python -m subvocal replay data/sessions/SESSION/trials/TRIAL/uart.bin
-.venv/bin/python -m subvocal train --sessions TRAIN_SESSION TEST_SESSION --test TEST_SESSION
+.venv/bin/python -m gasp doctor
+.venv/bin/python -m gasp profile usb-phase-10hz
+.venv/bin/python -m gasp replay data/sessions/SESSION/trials/TRIAL/uart.bin
+.venv/bin/python -m gasp train --sessions TRAIN_SESSION TEST_SESSION --test TEST_SESSION
 .venv/bin/python -m pytest -q
 ```
 
@@ -162,3 +162,5 @@ Implementation is original and based on documented wire formats; TI proprietary 
 - [mSilent research](https://wanhaoran.github.io/assets/papers/mSilent_final.pdf): motivation, not a claim that this baseline reproduces its system.
 
 See [the research roadmap](docs/ROADMAP.md), [contribution notes](CONTRIBUTING.md), and [third-party references](THIRD_PARTY_NOTICES.md). Original project materials are available under the [MIT license](LICENSE). Recordings, trained models, downloaded TI packages, and local viewer logs are excluded from this repository.
+
+Inspired by [Subvocal](https://subvocal.company/preorder) and [Aarush Yadav’s announcement](https://x.com/AarushYadav47/status/2116198463847408066). Gasp is an independent project with no affiliation.

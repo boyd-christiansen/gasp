@@ -1,8 +1,8 @@
 import struct
 import numpy as np
 import pytest
-from subvocal.dca import PacketWriter, command_packet, parse_reply, decode_adc
-from subvocal.profile import bundled_profile
+from gasp.dca import PacketWriter, command_packet, parse_reply, decode_adc
+from gasp.profile import bundled_profile
 
 
 def packet(seq,offset,data):return struct.pack('<I',seq)+offset.to_bytes(6,'little')+data

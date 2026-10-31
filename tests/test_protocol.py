@@ -4,7 +4,7 @@ import struct
 import subprocess
 import numpy as np
 import pytest
-from subvocal.protocol import Parser, Frame, encode_frame, MAGIC, HEADER
+from gasp.protocol import Parser, Frame, encode_frame, MAGIC, HEADER
 
 
 def test_fragmented_resync_and_multiple_frames():

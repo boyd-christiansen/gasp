@@ -3,11 +3,11 @@ import json
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from subvocal.server import create_app
-from subvocal.cli import seed_demo
-from subvocal.storage import Store
-from subvocal.training import train, predict
-from subvocal.profile import bundled_profile
+from gasp.server import create_app
+from gasp.cli import seed_demo
+from gasp.storage import Store
+from gasp.training import train, predict
+from gasp.profile import bundled_profile
 
 
 def test_capture_review_media_and_source_errors(tmp_path):
