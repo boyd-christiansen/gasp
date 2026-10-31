@@ -33,12 +33,12 @@ The root page is an older research workbench. A source launch with `serve --rese
 
 ## Your first training visit
 
-1. In **Session setup**, connect the **Simulator**. When using a physical board, follow [hardware bring-up](HARDWARE.md) first.
+1. In **Radar data → Setup**, connect the **Simulator**. When using a physical board, follow [hardware bring-up](HARDWARE.md) first.
 2. Create a **Personal calibration** visit. Save your participant name, distance, posture, and room notes. Paired collection records each speech prompt aloud and then silently as separate takes. Rest and movement checks have their own labels.
 3. Optionally enable reference audio. The installed app asks for microphone access only when you enable it. Audio stays local and is never transcribed or used as an input to the radar classifier.
-4. Start with the on-screen recording button. In the installed app, you can enable a **double tap of Right Option** after granting Input Monitoring. Tap once to finish or press Escape to cancel. Buttons work without that permission.
+4. Start with the on-screen recording button. In the installed app’s **Dictation → Settings**, you can enable a **double tap of Right Option** after granting Input Monitoring. Tap once to finish or press Escape to cancel. Buttons work without that permission.
 5. **Wait for the readiness sound and Recording indicator**, then perform the prompt. DCA capture arms before it is ready. Finish after the utterance, within the take limit.
-6. In **Review takes**, inspect the trace and loss figures, listen to reference audio if present, and confirm what you actually performed. Preserve repetitions and fillers. Use the script-confirmation button only when you followed it exactly.
+6. In **Review takes**, inspect the trace and loss figures, listen to reference audio if present, and confirm what you actually performed. Preserve repetitions and fillers. Use **Use prompt** only when you followed it exactly.
 7. Choose **Verify & keep**, or reject the take and try again. New takes are excluded from training until approved. Scripts and visit progress survive restarts.
 
 Calibration includes stillness, movement, syllables, and vowels. It does not automatically calibrate a speech decoder or establish phonetic separability.

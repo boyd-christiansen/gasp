@@ -20,7 +20,7 @@ final class AudioReference {
 
     func start() throws {
         guard stopped, location == nil else { throw failure("Finish the previous audio reference first.") }
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable microphone access in Session setup first.") }
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Radar data → Setup.") }
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw failure("No microphone input is available.") }
@@ -82,13 +82,13 @@ struct CaptureOverlay: View {
     @ObservedObject var state: OverlayState
     var body: some View {
         HStack(spacing:13) {
-            Image(systemName:state.active ? "waveform" : "checkmark.circle").font(.system(size:22)).foregroundColor(state.active ? Color(red:0.88,green:0.67,blue:0.4) : Color(red:0.67,green:0.82,blue:0.65))
+            Image(systemName:state.active ? "waveform" : "checkmark.circle").font(.system(size:22)).foregroundColor(state.active ? Color.white : Color.white.opacity(0.7))
             VStack(alignment:.leading,spacing:4) {
                 Text(state.title).font(.system(size:13,weight:.medium)).foregroundColor(.white)
                 Text(state.detail).font(.system(size:11)).foregroundColor(.white.opacity(0.6)).lineLimit(1)
             }
             Spacer(minLength:0)
-        }.padding(18).frame(width:370,height:76).background(Color(red:0.13,green:0.23,blue:0.19)).cornerRadius(15)
+        }.padding(18).frame(width:370,height:76).background(Color(white:0.08)).cornerRadius(15)
     }
 }
 
@@ -129,19 +129,19 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         web = WKWebView(frame:.zero,configuration:configuration); web.navigationDelegate = self
         web.setValue(false,forKey:"drawsBackground")
         window = NSWindow(contentRect:NSRect(x:0,y:0,width:1230,height:870),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
-        window.title = "Gasp · Training Studio"; window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(calibratedRed:0.969,green:0.973,blue:0.957,alpha:1)
+        window.title = "Gasp"; window.titlebarAppearsTransparent = true
+        window.backgroundColor = NSColor.white
         window.appearance = NSAppearance(named:.aqua)
         window.minSize = NSSize(width:860,height:650); window.contentView = web
         window.center(); window.setFrameAutosaveName("TrainingStudio"); window.makeKeyAndOrderFront(nil)
-        web.loadHTMLString("<body style='font:16px -apple-system;background:#f7f8f4;color:#204b3e;padding:80px'><h1>gasp</h1><p>Starting your local training studio…</p></body>",baseURL:nil)
+        web.loadHTMLString("<body style='font:16px -apple-system;background:#fff;color:#171717;padding:80px'><h1>gasp</h1><p>Starting…</p></body>",baseURL:nil)
         NSApp.activate(ignoringOtherApps:true)
     }
     func makeMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName:"waveform",accessibilityDescription:"Gasp training")
+        statusItem.button?.image = NSImage(systemSymbolName:"waveform",accessibilityDescription:"Gasp")
         let menu = NSMenu()
-        menu.addItem(withTitle:"Open Training Studio",action:#selector(showWindow),keyEquivalent:"").target = self
+        menu.addItem(withTitle:"Open Gasp",action:#selector(showWindow),keyEquivalent:"").target = self
         menu.addItem(withTitle:"Record / finish take",action:#selector(toggle),keyEquivalent:"").target = self
         menu.addItem(withTitle:"Cancel take",action:#selector(cancel),keyEquivalent:"").target = self
         menu.addItem(.separator())
@@ -202,10 +202,10 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             do {
                 var result: Any = ["ok":true]
                 switch action {
-                case "info": result = ["keyCode":Int(gesture.keyCode),"shortcutEnabled":eventTap != nil,"shortcutMessage":eventTap != nil ? "Input Monitoring is available. The shortcut works across apps." : "Enable Input Monitoring to use the shortcut across apps. On-screen capture works now."]
+                case "info": result = ["keyCode":Int(gesture.keyCode),"shortcutEnabled":eventTap != nil,"shortcutMessage":eventTap != nil ? "Shortcut enabled · radar capture" : "Input Monitoring permission required · radar capture"]
                 case "enableShortcut":
                     setKey(body); startMonitor(request:true)
-                    result = ["enabled":eventTap != nil,"message":eventTap != nil ? "Shortcut enabled. Double-tap to start; tap once to finish. Escape cancels." : "Allow Gasp in System Settings → Privacy & Security → Input Monitoring, then click Enable again."]
+                    result = ["enabled":eventTap != nil,"message":eventTap != nil ? "Shortcut enabled · radar capture" : "Allow Gasp in System Settings → Privacy & Security → Input Monitoring, then click Enable again."]
                 case "setShortcut": setKey(body)
                 case "audioPermission":
                     let allowed = await AVCaptureDevice.requestAccess(for:.audio)

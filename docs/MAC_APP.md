@@ -1,4 +1,4 @@
-# Gasp Training Studio · first Mac app
+# Gasp · Mac app
 
 This release collects and reviews personal radar training data. It is an installed macOS application with a menu bar, a small non-activating recording overlay, and a bundled local capture engine. It needs no Terminal window, cloud account, Python installation, API key, or transcription model to run.
 
@@ -7,15 +7,21 @@ This release collects and reviews personal radar training data. It is an install
 ## Start collecting
 
 1. Open **Gasp** in your user Applications folder (`~/Applications/Gasp.app`).
-2. In **Session setup**, connect the **Simulator** to practice. Its waveforms and all derived results are clearly marked synthetic and cannot establish speech-recognition accuracy.
+2. In **Radar data → Setup**, connect the **Simulator** to practice. Its waveforms and all derived results are clearly marked synthetic and cannot establish speech-recognition accuracy.
 3. Create a **Personal calibration** visit with your participant name, distance, posture and room notes. Choose paired voiced/silent collection or a single mode. Movement and rest checks have their own labels.
 4. Optionally enable reference audio. macOS asks for microphone access at that point. Audio is saved locally with each take; it is never transcribed.
-5. Record a take with the on-screen button. In the installed app, enable the system-wide shortcut and grant macOS **Input Monitoring** to use a double tap of Right Option. Right Control and Fn/Globe are alternatives; OS shortcuts can conflict with them. Press the same key once to finish or Escape to cancel. Modifier-plus-typing does not count as a tap. Input Monitoring is optional; buttons and menu controls work without it. The listener observes events without blocking their normal delivery.
+5. Record a take with the on-screen button. In **Dictation → Settings** in the installed app, enable the recording shortcut and grant macOS **Input Monitoring** to use a double tap of Right Option. Right Control and Fn/Globe are alternatives; OS shortcuts can conflict with them. Press the same key once to finish or Escape to cancel. Modifier-plus-typing does not count as a tap. Input Monitoring is optional; buttons and menu controls work without it. The listener observes events without blocking their normal delivery.
 6. **Wait for the readiness sound and Recording indicator before performing the prompt.** DCA first arms and waits for data. There is no claim of zero-latency start. Takes end automatically at their short duration limit or can be finished early after half a second.
-7. Open the saved take in **Review takes**. Listen to reference audio if present, inspect the trace and loss figures, and confirm what you actually said or silently mouthed. Use the explicit script-confirmation button only if you followed it. Keep fillers and repetitions; do not polish the transcript. Reject uncertain or corrupted takes.
+7. Open the saved take in **Review takes**. Listen to reference audio if present, inspect the trace and loss figures, and confirm what you actually said or silently mouthed. Use **Use prompt** only if you followed the prompt. Keep fillers and repetitions; do not polish the transcript. Reject uncertain or corrupted takes.
 8. **Verify & keep** makes the take eligible for training and advances the script. Rejected takes stay in the archive and leave the script step available for a retake. A cancelled USB recording adds no trial. Cancelled DCA recordings retain partial raw diagnostics but add no training trial. Once DCA decoding has started, wait and reject the resulting take instead.
 
 Visits and script order survive app restarts. Select a visit in the sidebar to load it, connect its matching source/profile, and resume. Restarts do not automatically open hardware or begin recording. No always-on microphone or radar recording is enabled.
+
+## Workspaces
+
+**Radar data** contains **Capture**, **Recordings**, **Training**, and **Setup**. Visits stay in its sidebar. Source configuration, reference audio, and new-visit settings are under Setup. The interface and native recording overlay use a monochrome palette.
+
+**Dictation** contains **History** and **Settings**. History is an empty shell until a dictation engine is implemented; radar takes and reviewed training labels are not presented as dictation results. The shortcut setting is shared with radar capture. Selecting Dictation does not enable speech recognition or start radar collection through the recording shortcut. An already-running radar take can still be finished.
 
 ## Collection plan
 

@@ -9,11 +9,11 @@
 
 Two desktop prototypes: the **full capture stack** for IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM, and the **single-board enclosure with its new desktop dock**. [Explore the hardware and print files →](docs/ENCLOSURES.md)
 
-## Training Studio
+## The app
 
 Gasp is a local Mac app for recording radar data while you read or silently mouth scripts. It guides calibration, pairs optional reference audio with radar takes, and lets you review recordings before training a personal phrase model.
 
-![Gasp Training Studio](docs/training-studio-preview.jpg)
+![Gasp app](docs/gasp-preview.png)
 
 **This first version focuses on training data. Transcription and text insertion are disabled.** The enclosures are CAD prototypes, and physical radar performance and real silent-speech accuracy remain unverified.
 
@@ -31,7 +31,7 @@ The installed app supports a double tap of Right Option to record. Takes and ref
 Start with the **[documentation index](docs/README.md)** for setup and how-to guides:
 
 - [Getting started](docs/GETTING_STARTED.md) — install, launch, and collect your first takes.
-- [Using Training Studio](docs/MAC_APP.md) — controls, scripts, review, and local recordings.
+- [Using Gasp](docs/MAC_APP.md) — controls, scripts, review, and local recordings.
 - [Hardware and enclosures](docs/ENCLOSURES.md) — choose a build, print parts, and connect the radar.
 - [Training and experiments](docs/EXPERIMENTS.md) — data collection, labels, and evaluation.
 - [Contributing](CONTRIBUTING.md) — development and verification.

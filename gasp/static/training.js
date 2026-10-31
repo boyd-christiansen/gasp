@@ -17,7 +17,9 @@ let state = {},
   busy = false,
   polling = false,
   reviewTrials = [],
-  selectedTrial = null;
+  selectedTrial = null,
+  currentPage = "collect",
+  noticeTimer = null;
 let offsetMs = 0,
   uncertaintyMs = 0,
   audioActive = false,
@@ -66,9 +68,11 @@ async function api(path, method = "GET", body) {
   return result;
 }
 function notice(text, error = false) {
+  clearTimeout(noticeTimer);
   $("notice").hidden = false;
   $("notice").className = error ? "error" : "";
   $("notice").textContent = text;
+  if (!error) noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 4500);
 }
 function act(id, fn) {
   $(id).onclick = async (e) => {
@@ -81,28 +85,36 @@ function act(id, fn) {
   };
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function page(name) {
-  document
-    .querySelectorAll(".page")
-    .forEach((e) => (e.hidden = e.id !== "page-" + name));
-  document
-    .querySelectorAll("nav button")
-    .forEach((e) => e.classList.toggle("selected", e.dataset.page === name));
+function page(name, reload = true) {
   const region = $("page-" + name);
+  if (!region) return;
+  currentPage = name;
+  const dictation = name.startsWith("dictation");
+  document.querySelectorAll(".page").forEach((e) => (e.hidden = e !== region));
+  document.querySelectorAll("[data-page]").forEach((e) => {
+    const selected = e.dataset.workspace
+      ? e.dataset.workspace === (dictation ? "dictation" : "radar")
+      : e.dataset.page === name;
+    e.classList.toggle("selected", selected);
+    if (selected) e.setAttribute("aria-current", "page");
+    else e.removeAttribute("aria-current");
+  });
+  $("radarSidebar").hidden = dictation;
+  $("radarTabs").hidden = dictation;
+  $("dictationTabs").hidden = !dictation;
+  $("connectionStatus").hidden = dictation;
+  $("dictationStatus").hidden = !dictation;
+  $("pageTitle").textContent = dictation ? "Dictation" : "Radar data";
+  $("notice").hidden = true;
   region.focus({ preventScroll: true });
   window.scrollTo(0, 0);
-  $("pageTitle").textContent = {
-    collect: "Build your training set.",
-    setup: "Make yourself comfortable.",
-    review: "Good data starts with review.",
-    train: "Train a personal baseline.",
-  }[name];
-  if (name === "train") loadTraining().catch((e) => notice(e.message, true));
-  if (name === "review") loadReview().catch((e) => notice(e.message, true));
+  if (reload && name === "train") loadTraining().catch((e) => notice(e.message, true));
+  if (reload && name === "review") loadReview().catch((e) => notice(e.message, true));
+  if (name === "collect") plot("signal", state.phase || []);
 }
-document
-  .querySelectorAll("nav button")
-  .forEach((e) => (e.onclick = () => page(e.dataset.page)));
+document.querySelectorAll("[data-page]").forEach((e) => {
+  e.onclick = () => page(e.dataset.page);
+});
 function overlay(status, detail = "") {
   if (native)
     bridge("status", { status, detail, active: !!activeRecord }).catch(
@@ -132,6 +144,7 @@ function pendingTake() {
   );
 }
 function renderCollection() {
+  $("visits").querySelectorAll(".visit").forEach((b) => b.classList.toggle("active", b.dataset.id === activeSession?.id));
   const plan = activeSession?.collection?.plan,
     step = currentStep(),
     kept = trials.filter(
@@ -140,8 +153,8 @@ function renderCollection() {
   $("keptCount").textContent = kept;
   $("visitName").textContent = activeSession
     ? activeSession.name
-    : "Start a new visit to begin";
-  $("deckName").textContent = plan?.deck_name || "YOUR FIRST SESSION";
+    : "No visit selected";
+  $("deckName").textContent = plan?.deck_name || "Collection";
   $("modeBadge").textContent = step
     ? {
         voiced: "SPEAK ALOUD",
@@ -166,46 +179,45 @@ function renderCollection() {
   $("progressFill").style.width = plan
     ? (100 * completed) / plan.steps.length + "%"
     : "0%";
+  $("progressFill").parentElement.setAttribute("aria-valuenow", plan ? String(Math.round(100 * completed / plan.steps.length)) : "0");
   $("stepCount").textContent = plan
-    ? `${completed} OF ${plan.steps.length} STEPS VERIFIED`
-    : "A SMALL START, A USEFUL DATASET";
+    ? `${completed} / ${plan.steps.length} verified`
+    : "";
   $("promptText").textContent =
     step?.prompt_text ||
-    (plan ? "This visit is complete." : "Start with a personal calibration.");
+    (plan ? "Visit complete" : "Create a visit");
   $("promptInstruction").textContent = step
     ? step.instruction ||
       (step.articulation === "silent"
-        ? "Mouth the words naturally, without voicing or whispering."
-        : "Speak naturally. You can finish early with the recording key.")
+        ? "Mouth silently"
+        : "Speak aloud")
     : plan
-      ? "Come back for another visit with the same deck. A new position or a new day makes a stronger test."
-      : "We’ll check your position, record a few sounds, and capture everyday movements.";
-  if (step?.pair_id)
-    $("promptInstruction").textContent +=
-      " Paired takes share the text; their timing is independent.";
+      ? ""
+      : "";
+
   if (!activeRecord) {
     $("recordButton").textContent = !plan
-      ? "Set up a visit ↗"
+      ? "New visit →"
       : !step
-        ? "Start another visit ↗"
+        ? "New visit →"
         : pendingTake()
-          ? "Review your last take →"
-          : "Record this take";
+          ? "Review take →"
+          : "Record take";
     $("recordButton").className = "primary";
     $("recordButton").disabled = busy;
     $("cancelButton").hidden = true;
     $("recordingState").className = "record-state";
     $("recordingState").textContent = pendingTake()
-      ? "Saved · review before moving on"
+      ? "Pending review"
       : step
-        ? `Up to ${step.duration_s} seconds · finish early when you’re done`
-        : "Ready when you are";
+        ? `Up to ${step.duration_s}s`
+        : "Ready";
   }
   const p = pendingTake();
   $("latestTake").hidden = !p;
   if (p) {
     $("latestTake").innerHTML =
-      `<div><strong>Your take is saved, awaiting review.</strong><p>${p.frames} radar samples · ${p.duration_s.toFixed(1)} seconds · ${p.articulation}${p.synthetic ? " · SYNTHETIC" : ""}</p></div><button class="quiet" id="reviewLatest">Review take →</button>`;
+      `<div><strong>Ready for review</strong><p>${p.frames} radar samples · ${p.duration_s.toFixed(1)} seconds · ${p.articulation}${p.synthetic ? " · SYNTHETIC" : ""}</p></div><button class="quiet" id="reviewLatest">Review take →</button>`;
     $("reviewLatest").onclick = () => openReview(activeSession.id, p.id);
   }
 }
@@ -216,10 +228,10 @@ async function refreshVisits() {
       .filter((s) => s.collection)
       .map(
         (s) =>
-          `<button class="visit" data-id="${s.id}"><strong>${escapeHTML(s.name)}</strong><small>${s.accepted_count} verified · ${escapeHTML(s.collection.visit_role)}${s.synthetic ? " · SIM" : ""}</small></button>`,
+          `<button class="visit${s.id === activeSession?.id ? " active" : ""}" data-id="${s.id}"><strong>${escapeHTML(s.name)}</strong><small>${s.accepted_count} verified · ${escapeHTML(s.collection.visit_role)}${s.synthetic ? " · SIM" : ""}</small></button>`,
       )
       .join("") ||
-    '<p class="small">Your collection visits will appear here.</p>';
+    '<p class="small">No visits yet</p>';
   $("visits")
     .querySelectorAll("button")
     .forEach(
@@ -239,7 +251,7 @@ async function refreshVisits() {
     $("reviewSession").value = previous;
   else if (activeSession) $("reviewSession").value = activeSession.id;
   $("calibration").innerHTML =
-    '<option value="">No reference linked yet</option>' +
+    '<option value="">None</option>' +
     sessions
       .filter(
         (s) =>
@@ -259,17 +271,18 @@ async function resume(sid) {
   activeSession = await api("sessions/" + sid);
   trials = await api("sessions/" + sid + "/trials");
   renderCollection();
+  $("visits").querySelectorAll(".visit").forEach((b) => b.classList.toggle("active", b.dataset.id === sid));
   page("collect");
   if (state.status === "connected") {
     try {
       await api("sessions/" + sid + "/resume", "POST");
-      notice("Resumed this visit. Approved steps are already checked off.");
+      notice("Visit resumed");
     } catch (e) {
       notice(e.message + " You can still review saved takes.", true);
     }
   } else
     notice(
-      "Visit loaded. Connect its source in Session setup before recording.",
+      "Visit loaded. Connect its source in Setup.",
     );
 }
 act("refreshVisits", refreshVisits);
@@ -289,7 +302,7 @@ async function ports() {
   }
   if (!ps.length)
     notice(
-      "No radar serial ports found. You can practice with the simulator now.",
+      "No serial ports found",
     );
 }
 function sourceChanged() {
@@ -303,10 +316,10 @@ function sourceChanged() {
     : '<option value="usb-phase-20hz">USB phase · 20 Hz</option><option value="usb-phase-10hz">USB phase · 10 Hz</option>';
   $("sourceHelp").textContent =
     kind === "simulator"
-      ? "Synthetic waveforms test the app. They cannot train a speech recognizer."
+      ? "Simulated data"
       : dca
-        ? "DCA needs the carrier board, radar USB command port, Ethernet, and compatible firmware."
-        : "Compatible SDK 3.x OOB AOP firmware is required. Select both observed USB port roles.";
+        ? "MMWAVEICBOOST + DCA1000 · 25s take limit"
+        : "SDK 3.x OOB AOP firmware required";
   if (kind !== "simulator") ports().catch((e) => notice(e.message, true));
   refreshVisits().catch(() => {});
 }
@@ -327,8 +340,8 @@ act("connectButton", async () => {
     });
     notice(
       $("source").value === "simulator"
-        ? "Simulator connected. All recordings will be marked synthetic."
-        : "Source connected. Validate the signal before collecting speech.",
+        ? "Simulator connected"
+        : "Source connected",
     );
     await poll();
   } finally {
@@ -338,7 +351,7 @@ act("connectButton", async () => {
 act("disconnectButton", async () => {
   await api("disconnect", "POST");
   await poll();
-  notice("Disconnected. All saved takes remain on this Mac.");
+  notice("Disconnected");
 });
 function deckChanged() {
   const deck = decks.find((d) => d.id === $("deck").value);
@@ -373,7 +386,7 @@ $("visitForm").onsubmit = async (e) => {
     renderCollection();
     await refreshVisits();
     page("collect");
-    notice("Visit created. Record a take, then verify it before moving on.");
+    notice("Visit created");
     await poll();
   } catch (e) {
     notice(e.message, true);
@@ -398,11 +411,11 @@ $("referenceAudio").onchange = async () => {
         });
       }
       $("audioHelp").textContent =
-        "Enabled · audio stays with the take on this Mac. No speech recognition.";
+        "Microphone enabled";
     } else {
       browserAudio?.getTracks().forEach((t) => t.stop());
       browserAudio = null;
-      $("audioHelp").textContent = "Reference audio is off.";
+      $("audioHelp").textContent = "";
     }
   } catch (e) {
     $("referenceAudio").checked = false;
@@ -474,6 +487,10 @@ async function toggleRecording() {
     return;
   }
   if (busy) return;
+  if (currentPage.startsWith("dictation")) {
+    notice("Configure a speech model to use dictation.");
+    return;
+  }
   if (!activeSession?.collection || !currentStep()) {
     page("setup");
     return;
@@ -526,7 +543,7 @@ async function toggleRecording() {
         r.status === "arming"
           ? "Arming sensor…"
           : r.status === "recording"
-            ? "Recording · finish when you’re done"
+            ? "Recording"
             : r.status === "processing"
               ? "Saving radar data…"
               : r.status === "cancelling"
@@ -557,7 +574,7 @@ async function toggleRecording() {
           await refreshVisits();
           overlay("Saved · review take", r.trial.prompt_text);
           notice(
-            "Take saved locally. Confirm the actual text before adding it to training.",
+            "Take saved",
           );
         } else {
           await discardAudio();
@@ -607,10 +624,15 @@ act("enableShortcut", async () => {
   });
   $("hotkeyHelp").textContent = r.message;
   $("shortcutHint").textContent = r.enabled
-    ? `Double-tap ${$("hotkey").selectedOptions[0].text} to record · press again to finish`
-    : "Enable the recording shortcut in Session setup";
+    ? `${$("hotkey").selectedOptions[0].text} · double tap to record`
+    : "Set recording shortcut";
 });
+function shortcutKeys() {
+  const symbol = {61: "⌥", 62: "⌃", 63: "fn"}[$("hotkey").value];
+  document.querySelectorAll(".shortcut kbd").forEach((k) => { k.textContent = symbol; });
+}
 $("hotkey").onchange = () => {
+  shortcutKeys();
   if (native)
     bridge("setShortcut", { keyCode: Number($("hotkey").value) }).catch((e) =>
       notice(e.message, true),
@@ -619,7 +641,7 @@ $("hotkey").onchange = () => {
 async function loadReview(tid) {
   const sid = $("reviewSession").value;
   if (!sid) {
-    $("takeList").innerHTML = '<p class="empty">No collection takes yet.</p>';
+    $("takeList").innerHTML = '<p class="empty">No recordings</p>';
     return;
   }
   reviewTrials = await api("sessions/" + sid + "/trials");
@@ -630,7 +652,7 @@ async function loadReview(tid) {
         (t) =>
           `<button class="take-item" data-id="${t.id}"><strong>${escapeHTML(t.prompt_text || t.label)}</strong><small>${escapeHTML(t.articulation)} · ${escapeHTML(t.review_status || "legacy")} · ${t.duration_s.toFixed(1)}s${t.synthetic ? " · SIM" : ""}</small></button>`,
       )
-      .join("") || '<p class="empty">Record your first take.</p>';
+      .join("") || '<p class="empty">No recordings</p>';
   $("takeList")
     .querySelectorAll("button")
     .forEach(
@@ -645,11 +667,11 @@ async function loadReview(tid) {
   if (selected) await showTake(selected);
   else
     $("reviewDetail").innerHTML =
-      '<p class="empty">No takes in this visit yet.</p>';
+      '<p class="empty">No recordings in this visit</p>';
 }
 async function openReview(sid, tid) {
   $("reviewSession").value = sid;
-  page("review");
+  page("review", false);
   await loadReview(tid);
 }
 $("reviewSession").onchange = () =>
@@ -667,7 +689,7 @@ async function showTake(tid) {
     ? t.adc_quality.dropped_frames / Math.max(1, t.adc_quality.complete_frames)
     : t.frame_gaps / Math.max(1, t.frames);
   $("reviewDetail").innerHTML =
-    `<span class="eyebrow">ORIGINAL PROMPT · ${escapeHTML(t.articulation).toUpperCase()}</span><h2>${escapeHTML(t.prompt_text || t.label)}</h2><div class="metadata">${t.frames} radar samples · ${t.duration_s.toFixed(2)} seconds · ${(loss * 100).toFixed(1)}% missing frames${t.synthetic ? " · SYNTHETIC — software practice only" : ""}</div>${loss > 0.05 ? '<p class="warning">High frame loss. Retake this sample; training will exclude it.</p>' : ""}${t.media ? `<audio controls preload="metadata" src="/api/sessions/${sid}/trials/${tid}/media"></audio><p class="small">${escapeHTML(t.media.synchronization)}</p>` : `<p class="small">${t.reference_expected ? "Reference audio was requested but is missing." : "No reference audio was recorded."}</p>`}<canvas id="reviewSignal" height="100" aria-label="Saved radar phase signal" style="width:100%;height:100px;margin:15px 0"></canvas><label>${negative ? "Confirmed movement / rest label" : "What did you actually say or silently mouth?"}<textarea id="confirmedText" rows="3" maxlength="200" placeholder="Confirm the script or enter the actual words">${escapeHTML(t.confirmed_text || "")}</textarea></label><button class="quiet" id="useScript">${negative ? "Use the movement label" : "I followed the script exactly"}</button><p class="small">Keep repetitions and fillers. Don’t rewrite or polish. For silent takes, confirm your intended words; reject the take if you lost your place.</p><details><summary class="small">Optional utterance boundaries</summary><p class="small">Seconds from the first saved radar sample. These are manual trim points, not word alignment.</p><div class="two"><label>Start (s)<input id="trimStart" type="number" step=".01" min="0" value="${t.utterance_start_s || 0}"></label><label>End (s)<input id="trimEnd" type="number" step=".01" max="${t.duration_s}" value="${t.utterance_end_s || t.duration_s}"></label></div></details><label>Take notes<textarea id="reviewNotes" rows="2" maxlength="4000">${escapeHTML(t.notes || "")}</textarea></label><div class="button-row"><button class="primary" id="keepTake">Verify & keep →</button><button class="quiet" id="rejectTake">Reject take</button></div><p class="small">Status: ${escapeHTML(t.review_status)} · Raw radar and original prompt are preserved.</p>`;
+    `<div class="card-top"><span class="eyebrow">${escapeHTML(t.articulation)}</span><span class="mode">${escapeHTML(t.review_status || "legacy")}${t.synthetic ? " · SIM" : ""}</span></div><h2>${escapeHTML(t.prompt_text || t.label)}</h2><div class="metadata">${t.frames} samples · ${t.duration_s.toFixed(2)}s · ${(loss * 100).toFixed(1)}% missing</div>${loss > 0.05 ? '<p class="warning">High frame loss · retake</p>' : ""}${t.media ? `<audio controls preload="metadata" src="/api/sessions/${sid}/trials/${tid}/media"></audio>` : (t.reference_expected ? '<p class="warning">Reference audio missing</p>' : "")}<canvas id="reviewSignal" height="100" aria-label="Saved radar phase signal" style="width:100%;height:100px;margin:15px 0"></canvas><label>${negative ? "Movement / rest label" : "Confirmed text"}<textarea id="confirmedText" rows="3" maxlength="200" placeholder="Words performed">${escapeHTML(t.confirmed_text || "")}</textarea></label><button class="quiet" id="useScript">Use ${negative ? "label" : "prompt"}</button><details class="advanced"><summary>Timing &amp; notes</summary><div class="two"><label>Start (s)<input id="trimStart" type="number" step=".01" min="0" value="${t.utterance_start_s || 0}"></label><label>End (s)<input id="trimEnd" type="number" step=".01" max="${t.duration_s}" value="${t.utterance_end_s || t.duration_s}"></label></div><label>Notes<textarea id="reviewNotes" rows="2" maxlength="4000">${escapeHTML(t.notes || "")}</textarea></label>${t.media ? `<p class="small">${escapeHTML(t.media.synchronization)}</p>` : ""}</details><div class="button-row"><button class="primary" id="keepTake">Verify & keep <span aria-hidden="true">→</span></button><button class="quiet" id="rejectTake">Reject</button></div>`;
   $("useScript").onclick = () =>
     ($("confirmedText").value = t.target_text || t.prompt_text || t.label);
   act("keepTake", () => saveReview(true));
@@ -693,8 +715,8 @@ async function saveReview(accepted) {
   await loadReview(t.id);
   notice(
     accepted
-      ? "Verified and kept. This take is eligible for training."
-      : "Take rejected. You can record this step again.",
+      ? "Take verified"
+      : "Take rejected",
   );
   if (activeSession?.id === sid) {
     page("collect");
@@ -713,7 +735,7 @@ function plot(id, values = []) {
   c.height = h * ratio;
   const x = c.getContext("2d");
   x.scale(ratio, ratio);
-  x.strokeStyle = "#dce4d5";
+  x.strokeStyle = "#e5e5e5";
   x.lineWidth = 0.7;
   for (let i = 1; i < 4; i++) {
     x.beginPath();
@@ -730,7 +752,7 @@ function plot(id, values = []) {
       b = h - 9 - ((v - lo) / span) * (h - 18);
     i ? x.lineTo(a, b) : x.moveTo(a, b);
   });
-  x.strokeStyle = "#71936b";
+  x.strokeStyle = "#171717";
   x.lineWidth = 1.5;
   x.stroke();
 }
@@ -741,17 +763,17 @@ async function poll() {
     state = await api("live");
     const on = state.status === "connected";
     $("connectionStatus").textContent = state.synthetic
-      ? "◉ Simulator · synthetic"
+      ? "Simulator"
       : on
-        ? "● Radar connected"
+        ? "Radar connected"
         : state.status === "error"
-          ? "○ Source needs attention"
-          : "○ Not connected";
+          ? "Source error"
+          : "Not connected";
     $("connectionStatus").className =
       "status " + (state.synthetic ? "synthetic" : on ? "on" : "");
     $("signalKind").textContent =
       state.source === "dca1000"
-        ? "DCA · AFTER TAKE"
+        ? "DCA"
         : on
           ? "PHASE"
           : "OFFLINE";
@@ -761,18 +783,18 @@ async function poll() {
     $("signalNote").textContent =
       state.error ||
       (state.source === "dca1000"
-        ? "DCA previews update after a completed take."
+        ? "Updates after each take"
         : state.synthetic
-          ? "Synthetic movement · does not represent speech."
+          ? "Simulated signal"
           : state.complex_available
-            ? `${state.measured_hz.toFixed(1)} samples/s · signal presence does not establish speech quality.`
-            : "Connect a source in Session setup.");
+            ? `${state.measured_hz.toFixed(1)} samples/s`
+            : "No source connected");
     if (!activeRecord)
       overlay(
         on ? "Ready to collect" : "Connect a source",
         state.synthetic
           ? "Simulator · synthetic"
-          : activeSession?.name || "Session setup",
+          : activeSession?.name || "Setup",
       );
   } catch (e) {
     notice("Capture service unavailable: " + e.message, true);
@@ -781,7 +803,7 @@ async function poll() {
   }
 }
 async function init() {
-  const h = await api("health");
+  await api("health");
   decks = await api("decks");
   $("deck").innerHTML = decks
     .map((d) => `<option value="${d.id}">${escapeHTML(d.name)}</option>`)
@@ -804,18 +826,19 @@ async function init() {
   }
   renderCollection();
   if (!native) {
+    $("hotkey").disabled = true;
     $("enableShortcut").disabled = true;
     $("hotkeyHelp").textContent =
-      "Open the installed Mac app for the system-wide shortcut. On-screen capture works here.";
+      "Available in the Mac app · radar capture";
   } else {
     const r = await bridge("info");
     $("hotkey").value = String(r.keyCode);
     $("hotkeyHelp").textContent = r.shortcutMessage;
     $("shortcutHint").textContent = r.shortcutEnabled
-      ? `Double-tap ${$("hotkey").selectedOptions[0].text} to record · press again to finish`
-      : "Enable the recording shortcut in Session setup";
+      ? `${$("hotkey").selectedOptions[0].text} · double tap to record`
+      : "Set recording shortcut";
   }
-  $("pageTitle").title = h.data_root;
+  shortcutKeys();
   setInterval(poll, 700);
 }
 init().catch((e) => notice(e.message, true));
@@ -830,20 +853,15 @@ async function loadTraining() {
           `<label>${escapeHTML(s.name)} · ${s.accepted_count} verified${s.synthetic ? " · SIM" : ""}<select data-train-id="${s.id}"><option value="">Exclude visit</option>${!["validation", "test"].includes(s.collection.visit_role) ? '<option value="fit">Use for fitting</option>' : ""}${s.collection.visit_role !== "calibration" ? '<option value="test">Hold out for evaluation</option>' : ""}</select></label>`,
       )
       .join("") ||
-    '<p class="small">Collect and verify your first visits to begin.</p>';
+    '<p class="small">No eligible visits</p>';
   await loadReports();
 }
 async function loadReports() {
   const reports = await api("models");
-  $("modelReports").innerHTML =
-    reports
-      .map(
-        (r) =>
-          `<div class="report"><h3>${escapeHTML(r.articulation || "legacy")} phrase baseline${r.synthetic ? " · SYNTHETIC" : ""}</h3><p class="small">${r.train_examples} fitting / ${r.test_examples} held-out examples<br>${r.labels.length} labels · ${(r.accuracy * 100).toFixed(1)}% accuracy · ${(r.majority_baseline * 100).toFixed(1)}% majority baseline<br>Macro F1 ${r.macro_f1.toFixed(3)} · ${escapeHTML(r.source)}</p><p class="small">${r.synthetic ? "Synthetic metrics verify software only. They provide no speech-recognition evidence." : "Closed-set phrase evaluation only. Accuracy does not establish general dictation or idle false-activation performance."}</p><div class="metadata">${escapeHTML(r.id)}</div></div>`,
-      )
-      .join(
-        '<hr style="border:0;border-top:1px solid #e2e7df;margin:24px 0">',
-      ) || '<p class="empty">Your training reports will appear here.</p>';
+  $("modelReports").innerHTML = reports.map((r) =>
+    `<div class="report"><div class="card-top"><h3>${escapeHTML(r.articulation || "legacy")} phrase model</h3>${r.synthetic ? '<span class="mode">SIM</span>' : ""}</div><p class="small">${r.train_examples} training · ${r.test_examples} held out · ${r.labels.length} labels</p><p>${(r.accuracy * 100).toFixed(1)}% accuracy</p><div class="metadata">F1 ${r.macro_f1.toFixed(3)} · ${(r.majority_baseline * 100).toFixed(1)}% majority baseline<br>${escapeHTML(r.source)} · ${escapeHTML(r.id)}</div></div>`
+  ).join("") || '<p class="empty">No models yet</p>';
+
 }
 act("trainButton", async () => {
   const selections = [...document.querySelectorAll("[data-train-id]")];
@@ -870,8 +888,8 @@ act("trainButton", async () => {
         r.status === "failed"
           ? r.error
           : r.status === "complete"
-            ? "Complete · report saved locally."
-            : "Training the local baseline…";
+            ? "Model trained"
+            : "Training…";
       if (r.status === "failed") throw new Error(r.error);
       if (r.status === "complete") {
         await loadReports();

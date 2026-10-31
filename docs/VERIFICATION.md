@@ -78,3 +78,11 @@ All 29 regression tests and the renamed standalone bundle's synthetic capture/re
 The single-board v1.2 enclosure and its drop-in desktop dock are now included alongside the three-board capture case. The dock's two STL files passed closed-edge, consistent-winding, connected-surface and positive-volume checks. The six v1.2 STL exports were also checked against their recorded mesh results, including the two separate closed washers in the combined print file. The dock source matches its manifest hash, and both published checksum lists verify their files.
 
 The initial README now leads with hardware renders, the application screenshot and a short first-training flow; setup, capture details and model guidance are linked through the documentation index. Local documentation links and image paths were checked. No radar acquisition, physical printing, cable-bend test, strength/stability test or RF measurement was performed for this publication.
+
+## Monochrome app workspaces · 2026-10-31
+
+The installed app now has Radar data (Capture, Recordings, Training, Setup) and Dictation (History, Settings). Promotional copy, coaching cards and repeated status disclaimers were removed. Controls, plots, native window and recording overlay use a monochrome palette. Dictation remains an unconfigured UI shell with no fabricated history; a recording action there cannot start a new radar take. An active radar take can still be finished.
+
+All 29 regression tests passed. An isolated browser walkthrough connected the simulator, created a calibration visit, recorded and finished a take, opened Recordings, confirmed its label, verified it, and observed the script advance. Training and both Dictation tabs were exercised. The rebuilt standalone worker passed capture/review/reserved-holdout/CPU-training checks on synthetic data, and the complete Mac bundle passed signature verification.
+
+The final app was installed and opened, and its executable and frontend assets matched the final build. Native navigation, shortcut settings, and the dictation recording guard were checked. The five existing recording files matched their pre-install hashes; no user recordings were added or changed. Reference microphone capture, permission-granted global shortcuts, and physical radar/speech behavior remain unverified. The documentation screenshot uses an isolated simulator fixture.

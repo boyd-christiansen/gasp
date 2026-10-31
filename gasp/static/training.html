@@ -1,401 +1,148 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gasp · Training Studio</title>
-    <link rel="stylesheet" href="/static/training.css" />
-  </head>
-  <body>
-    <aside>
-      <div class="brand">
-        <span class="brand-mark">◖</span> gasp<span class="edition"
-          >TRAINING STUDIO</span
-        >
-      </div>
-      <nav>
-        <button data-page="collect" class="selected">
-          ◉ <span>Collect</span></button
-        ><button data-page="review">
-          ▤ <span>Review takes</span
-          ><span id="reviewBadge" class="nav-count">0</span></button
-        ><button data-page="train">◇ <span>Train baseline</span></button
-        ><button data-page="setup">⚙ <span>Session setup</span></button>
-      </nav>
-      <div class="visits-heading">
-        YOUR VISITS <button id="refreshVisits" title="Refresh visits">↻</button>
-      </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gasp</title>
+  <link rel="stylesheet" href="/static/training.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">g</span>Gasp</div>
+    <nav aria-label="Workspace">
+      <button aria-label="Radar data" data-workspace="radar" data-page="collect" class="selected" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l3-7 6 14 3-7h3"/></svg><span>Radar data</span>
+      </button>
+      <button aria-label="Dictation" data-workspace="dictation" data-page="dictation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v1a6 6 0 0 0 12 0v-1M12 18v3m-3 0h6"/></svg><span>Dictation</span>
+      </button>
+    </nav>
+    <div id="radarSidebar" class="visit-sidebar">
+      <div class="visits-heading">Visits<button id="refreshVisits" title="Refresh visits" aria-label="Refresh visits">↻</button></div>
       <div id="visits"></div>
-      <div class="sidebar-foot">
-        <span class="local-dot"></span> On this Mac only
-        <p>No cloud account. No uploads.</p>
-        <small>RADAR TRANSCRIPTION IS DISABLED</small>
+      <button class="new-visit" data-page="setup"><span aria-hidden="true">＋</span> New visit</button>
+    </div>
+    <div class="sidebar-bottom"><button data-page="dictation-settings" title="Settings" aria-label="Settings">⚙</button></div>
+  </aside>
+  <main>
+    <header class="workspace-header">
+      <h1 id="pageTitle">Radar data</h1>
+      <span class="status" id="connectionStatus">Not connected</span>
+      <span class="status" id="dictationStatus" hidden>Not configured</span>
+    </header>
+    <div id="radarTabs" class="tabs" role="navigation" aria-label="Radar data">
+      <button data-page="collect" class="selected" aria-current="page">Capture</button>
+      <button data-page="review">Recordings <span id="reviewBadge" class="nav-count">0</span></button>
+      <button data-page="train">Training</button>
+      <button data-page="setup" class="tab-end">Setup <span aria-hidden="true">↗</span></button>
+    </div>
+    <div id="dictationTabs" class="tabs" role="navigation" aria-label="Dictation" hidden>
+      <button data-page="dictation">History</button>
+      <button data-page="dictation-settings">Settings</button>
+    </div>
+    <div id="notice" role="status" hidden></div>
+
+    <section id="page-collect" class="page" role="region" aria-label="Radar capture" tabindex="-1">
+      <div class="section-heading"><div><span class="eyebrow">Current visit</span><h2 id="visitName">No visit selected</h2></div><div class="count"><strong id="keptCount">0</strong><span>verified</span></div></div>
+      <div class="collection-grid">
+        <article class="prompt-card">
+          <div class="card-top"><span id="deckName" class="eyebrow">Collection</span><span id="modeBadge" class="mode">SETUP</span></div>
+          <div class="progress" role="progressbar" aria-label="Verified script steps" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progressFill"></div></div>
+          <div class="prompt-area"><span id="stepCount" class="small"></span><h2 id="promptText">Create a visit</h2><p id="promptInstruction"></p></div>
+          <div id="recordingState" class="record-state">Ready</div>
+          <div class="record-controls"><button class="primary" id="recordButton">New visit <span aria-hidden="true">→</span></button><button class="quiet" id="cancelButton" hidden>Cancel</button></div>
+          <button class="shortcut" data-page="dictation-settings"><kbd>⌥</kbd><kbd>⌥</kbd><span id="shortcutHint">Recording shortcut</span></button>
+        </article>
+        <article class="signal-card">
+          <div class="card-top"><h3>Radar signal</h3><span id="signalKind" class="eyebrow">OFFLINE</span></div>
+          <canvas id="signal" height="180" aria-label="Radar phase signal"></canvas>
+          <div class="signal-stats"><span id="signalFrames">0 frames</span><span id="signalLoss">0 missing</span></div>
+          <p id="signalNote" class="small">No source connected</p>
+          <button class="quiet full-width" data-page="setup">Configure source</button>
+        </article>
       </div>
-    </aside>
-    <main>
-      <header>
-        <div>
-          <span class="eyebrow">PERSONAL RADAR RESEARCH</span>
-          <div id="pageTitle">Build your training set.</div>
-        </div>
-        <span class="status" id="connectionStatus">○ Not connected</span>
-      </header>
-      <div id="notice" role="status" hidden></div>
-      <section
-        id="page-collect"
-        class="page"
-        role="region"
-        aria-label="Collect training data"
-        tabindex="-1"
-      >
-        <div class="intro">
-          <div>
-            <h1>One good take<br />at a time.</h1>
-            <p>
-              Read a prompt. Check the recording.<br />Help your radar learn how
-              you speak.
-            </p>
-          </div>
-          <div class="stat">
-            <strong id="keptCount">0</strong><span>VERIFIED TAKES</span
-            ><small id="visitName">Start a new visit to begin</small>
-          </div>
-        </div>
-        <div class="collection-grid">
-          <article class="prompt-card">
-            <div class="card-top">
-              <span class="eyebrow" id="deckName">YOUR FIRST SESSION</span
-              ><span id="modeBadge" class="mode">SETUP</span>
-            </div>
-            <div class="progress"><div id="progressFill"></div></div>
-            <div class="prompt-area">
-              <span id="stepCount" class="eyebrow"
-                >A SMALL START, A USEFUL DATASET</span
-              >
-              <h2 id="promptText">Start with a personal calibration.</h2>
-              <p id="promptInstruction">
-                We’ll check your position, record a few sounds, and capture
-                everyday movements.
-              </p>
-            </div>
-            <div id="recordingState" class="record-state">
-              Ready when you are
-            </div>
-            <div class="record-controls">
-              <button class="primary" id="recordButton">
-                Set up a visit <span>↗</span></button
-              ><button class="quiet" id="cancelButton" hidden>
-                Cancel take
-              </button>
-            </div>
-            <div class="shortcut">
-              <kbd>⌥</kbd><kbd>⌥</kbd>
-              <span id="shortcutHint"
-                >Double-tap Right Option to record · press again to finish</span
-              >
-            </div>
-          </article>
-          <div class="support-column">
-            <article class="tip-card">
-              <span class="eyebrow">COLLECT WITH INTENTION</span>
-              <h3 id="tipTitle">A consistent setup matters.</h3>
-              <p id="tipText">
-                Keep the radar fixed, face it naturally, and return to the same
-                comfortable position between takes.
-              </p>
-              <div class="tip-line"></div>
-              <p class="small">
-                Voiced and silent takes stay separate. Every take needs your
-                approval before training.
-              </p>
-            </article>
-            <article class="signal-card">
-              <div class="card-top">
-                <span class="eyebrow">RADAR CHECK</span
-                ><span id="signalKind">OFFLINE</span>
-              </div>
-              <canvas
-                id="signal"
-                height="115"
-                aria-label="Radar phase signal"
-              ></canvas>
-              <div class="signal-stats">
-                <span id="signalFrames">0 frames</span
-                ><span id="signalLoss">—</span>
-              </div>
-              <p id="signalNote">Connect a source in Session setup.</p>
-            </article>
-          </div>
-        </div>
-        <div id="latestTake" class="latest" hidden></div>
-        <div class="collection-foot">
-          <span>01 · Capture</span><span>02 · Verify</span
-          ><span>03 · Repeat across visits</span
-          ><span class="muted">Text output comes later.</span>
-        </div>
-      </section>
-      <section
-        id="page-setup"
-        class="page"
-        role="region"
-        aria-label="Session setup"
-        tabindex="-1"
-        hidden
-      >
-        <h1>A little setup.<br />Better recordings.</h1>
-        <p class="lead">
-          Use the simulator now, or connect your radar when you’re home.
-        </p>
-        <div class="setup-grid">
+      <div id="latestTake" class="latest" hidden></div>
+    </section>
+
+    <section id="page-setup" class="page" role="region" aria-label="Radar setup" tabindex="-1" hidden>
+      <div class="section-heading"><h2>Setup</h2></div>
+      <div class="setup-grid">
+        <div class="settings-column">
           <article class="form-card">
-            <span class="eyebrow">01 / CAPTURE SOURCE</span>
-            <h3>Connect your radar</h3>
-            <label
-              >Source<select id="source">
-                <option value="simulator">
-                  Simulator · software practice only
-                </option>
-                <option value="serial">IWR6843AOP · USB</option>
-                <option value="dca1000">DCA1000 · raw ADC over Ethernet</option>
-              </select></label
-            >
+            <h3>Capture source</h3>
+            <label>Source<select id="source"><option value="simulator">Simulator</option><option value="serial">IWR6843AOP · USB</option><option value="dca1000">DCA1000 · Ethernet</option></select></label>
             <div id="hardwareFields" hidden>
-              <label>Radar command port<select id="cliPort"></select></label
-              ><label id="dataPortLabel"
-                >Radar data port<select id="dataPort"></select></label
-              ><button id="refreshPorts" class="quiet">Refresh ports</button
-              ><label
-                >Radar profile<select id="profile">
-                  <option value="usb-phase-20hz">USB phase · 20 Hz</option>
-                  <option value="usb-phase-10hz">USB phase · 10 Hz</option>
-                </select></label
-              >
+              <label>Command port<select id="cliPort"></select></label>
+              <label id="dataPortLabel">Data port<select id="dataPort"></select></label>
+              <button id="refreshPorts" class="quiet">Refresh ports</button>
+              <label>Profile<select id="profile"><option value="usb-phase-20hz">USB phase · 20 Hz</option><option value="usb-phase-10hz">USB phase · 10 Hz</option></select></label>
             </div>
             <div id="dcaFields" hidden>
-              <label
-                >Mac Ethernet IPv4<input
-                  id="hostIp"
-                  value="192.168.33.30" /></label
-              ><label
-                >DCA IPv4<input id="boardIp" value="192.168.33.180" /></label
-              ><label class="check"
-                ><input type="checkbox" id="confirmLayout" />I am using the
-                supported two-lane, complex16, RX non-interleaved, TDM layout
-                with no headers.</label
-              >
-              <p class="small">
-                Experimental profile. Validate lane mapping and timing before
-                collecting a large dataset. Maximum 25 seconds per take.
-              </p>
+              <label>Mac Ethernet IPv4<input id="hostIp" value="192.168.33.30" /></label>
+              <label>DCA IPv4<input id="boardIp" value="192.168.33.180" /></label>
+              <label class="check"><input type="checkbox" id="confirmLayout" />Two-lane complex16, RX non-interleaved, TDM, no headers</label>
             </div>
-            <p id="sourceHelp" class="small">
-              Synthetic waveforms test the app. They cannot train a speech
-              recognizer.
-            </p>
-            <div class="button-row">
-              <button id="connectButton" class="primary">Connect source</button
-              ><button id="disconnectButton" class="quiet">Disconnect</button>
-            </div>
+            <p id="sourceHelp" class="small">Simulated data</p>
+            <div class="button-row"><button id="connectButton" class="primary">Connect</button><button id="disconnectButton" class="quiet">Disconnect</button></div>
           </article>
           <article class="form-card">
-            <span class="eyebrow">02 / THIS VISIT</span>
-            <h3>Choose your collection</h3>
-            <form id="visitForm">
-              <div class="two">
-                <label
-                  >Participant<input
-                    id="subject"
-                    value="Boyd"
-                    required
-                    maxlength="80" /></label
-                ><label
-                  >Visit name<input id="sessionName" required maxlength="120"
-                /></label>
-              </div>
-              <label>Script deck<select id="deck"></select></label>
-              <p id="deckDescription" class="small"></p>
-              <div class="two">
-                <label
-                  >Speech mode<select id="mode">
-                    <option value="paired">Paired · aloud, then silent</option>
-                    <option value="silent">Silent articulation</option>
-                    <option value="voiced">Speaking aloud</option>
-                  </select></label
-                ><label
-                  >Repetitions<select id="repetitions">
-                    <option>1</option>
-                    <option selected>2</option>
-                    <option>3</option>
-                    <option>5</option>
-                    <option>10</option>
-                  </select></label
-                >
-              </div>
-              <div class="two">
-                <label
-                  >Dataset role<select id="visitRole">
-                    <option value="calibration">Calibration reference</option>
-                    <option value="train">Training visit</option>
-                    <option value="validation">
-                      Reserved validation visit
-                    </option>
-                    <option value="test">Reserved final test visit</option>
-                  </select></label
-                ><label
-                  >Distance to face (cm)<input
-                    id="distance"
-                    type="number"
-                    min="10"
-                    max="200"
-                    value="45"
-                    required
-                /></label>
-              </div>
-              <label
-                >Calibration reference<select id="calibration">
-                  <option value="">No reference linked yet</option>
-                </select></label
-              ><label
-                >Position / conditions<textarea
-                  id="positionNotes"
-                  rows="2"
-                  maxlength="2000"
-                  placeholder="Sensor height, angle, posture, room, or anything that changed"
-                ></textarea></label
-              ><button class="primary" type="submit">
-                Create visit & begin <span>→</span>
-              </button>
-            </form>
+            <h3>Reference audio</h3>
+            <label class="check"><input id="referenceAudio" type="checkbox" />Record microphone with each take</label>
+            <p id="audioHelp" class="small" aria-live="polite"></p>
           </article>
         </div>
-        <div class="setup-grid extras">
-          <article class="form-card">
-            <span class="eyebrow">REFERENCE AUDIO</span>
-            <h3>Keep a recording to check against</h3>
-            <p class="small">
-              Optional microphone audio is stored with each take. Speech
-              recognition stays disabled.
-            </p>
-            <label class="check"
-              ><input id="referenceAudio" type="checkbox" />Record reference
-              audio with each take</label
-            >
-            <p id="audioHelp" class="small">
-              Microphone permission is requested only when you enable this.
-            </p>
-          </article>
-          <article class="form-card">
-            <span class="eyebrow">RECORDING SHORTCUT</span>
-            <h3>Keep your hands on the keyboard</h3>
-            <label
-              >Double-tap key<select id="hotkey">
-                <option value="61">Right Option</option>
-                <option value="62">Right Control</option>
-                <option value="63">Fn / Globe</option>
-              </select></label
-            ><button id="enableShortcut" class="quiet">
-              Enable system-wide shortcut
-            </button>
-            <p id="hotkeyHelp" class="small">
-              The installed app uses macOS Input Monitoring. On-screen recording
-              works without it.
-            </p>
-          </article>
-        </div>
-      </section>
-      <section
-        id="page-review"
-        class="page"
-        role="region"
-        aria-label="Review recordings"
-        tabindex="-1"
-        hidden
-      >
-        <div class="review-heading">
-          <div>
-            <h1>Make every label count.</h1>
-            <p class="lead">
-              Keep what you actually said. Retake what you’re unsure about.
-            </p>
-          </div>
-          <select id="reviewSession" aria-label="Visit to review"></select>
-        </div>
-        <div class="review-grid">
-          <div id="takeList" class="take-list"></div>
-          <article id="reviewDetail" class="review-detail">
-            <p class="empty">Choose a take to inspect.</p>
-          </article>
-        </div>
-      </section>
-      <section
-        id="page-train"
-        class="page"
-        role="region"
-        aria-label="Train baseline"
-        tabindex="-1"
-        hidden
-      >
-        <h1>Collect first.<br />Evaluate honestly.</h1>
-        <p class="lead">
-          Train a local phrase classifier from verified takes. This does not
-          enable transcription.
-        </p>
-        <div class="setup-grid">
-          <article class="form-card">
-            <span class="eyebrow">WHOLE VISITS, SEPARATE SPLITS</span>
-            <h3>Choose the experiment</h3>
-            <p class="small">
-              Use the same participant, source and profile. Collect at least two
-              approved examples of each phrase in both fitting and held-out
-              visits. Reserve a new visit before tuning.
-            </p>
-            <label
-              >Articulation<select id="trainMode">
-                <option value="silent">Silent</option>
-                <option value="voiced">Voiced</option>
-                <option value="whisper">Whispered · legacy data</option>
-              </select></label
-            >
-            <div class="two">
-              <label
-                >Face range minimum (m)<input
-                  id="rangeMin"
-                  type="number"
-                  min="0"
-                  max="10"
-                  step=".01"
-                  value=".2" /></label
-              ><label
-                >Maximum (m)<input
-                  id="rangeMax"
-                  type="number"
-                  min=".01"
-                  max="10"
-                  step=".01"
-                  value=".85"
-              /></label>
-            </div>
-            <div id="trainVisits"></div>
-            <button class="primary" id="trainButton">
-              Train & evaluate baseline →
-            </button>
-            <p id="trainState" class="small">
-              CPU only · all processing stays on this Mac.
-            </p>
-          </article>
-          <article class="form-card">
-            <span class="eyebrow">EXPERIMENT RESULTS</span>
-            <div id="modelReports">
-              <p class="empty">Your training reports will appear here.</p>
-            </div>
-          </article>
-        </div>
-      </section>
-      <footer>
-        DESKTOP GASP
-        <span>Training-first preview · Hardware validation pending</span>
-      </footer>
-    </main>
-    <script src="/static/training.js"></script>
-  </body>
+        <article class="form-card">
+          <h3>New visit</h3>
+          <form id="visitForm">
+            <div class="two"><label>Participant<input id="subject" value="Boyd" required maxlength="80" /></label><label>Visit name<input id="sessionName" required maxlength="120" /></label></div>
+            <label>Script<select id="deck"></select></label>
+            <details class="script-details"><summary>Script details</summary><p id="deckDescription" class="small"></p></details>
+            <div class="two"><label>Speech mode<select id="mode"><option value="paired">Aloud, then silent</option><option value="silent">Silent</option><option value="voiced">Aloud</option></select></label><label>Repetitions<select id="repetitions"><option>1</option><option selected>2</option><option>3</option><option>5</option><option>10</option></select></label></div>
+            <div class="two"><label>Dataset role<select id="visitRole"><option value="calibration">Calibration</option><option value="train">Training</option><option value="validation">Validation</option><option value="test">Final test</option></select></label><label>Distance (cm)<input id="distance" type="number" min="10" max="200" value="45" required /></label></div>
+            <details class="advanced"><summary>Placement &amp; calibration</summary><label>Calibration reference<select id="calibration"><option value="">None</option></select></label><label>Position / conditions<textarea id="positionNotes" rows="2" maxlength="2000" placeholder="Height, angle, posture, room"></textarea></label></details>
+            <button class="primary full-width" type="submit">Create visit <span aria-hidden="true">→</span></button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-review" class="page" role="region" aria-label="Radar recordings" tabindex="-1" hidden>
+      <div class="section-heading"><h2>Recordings</h2><select id="reviewSession" aria-label="Visit to review"></select></div>
+      <div class="review-grid"><div id="takeList" class="take-list"></div><article id="reviewDetail" class="review-detail"><p class="empty">Select a recording</p></article></div>
+    </section>
+
+    <section id="page-train" class="page" role="region" aria-label="Radar training" tabindex="-1" hidden>
+      <div class="section-heading"><h2>Training</h2></div>
+      <div class="setup-grid">
+        <article class="form-card">
+          <h3>Dataset</h3>
+          <label>Speech mode<select id="trainMode"><option value="silent">Silent</option><option value="voiced">Aloud</option><option value="whisper">Whispered</option></select></label>
+          <div class="two"><label>Range minimum (m)<input id="rangeMin" type="number" min="0" max="10" step=".01" value=".2" /></label><label>Maximum (m)<input id="rangeMax" type="number" min=".01" max="10" step=".01" value=".85" /></label></div>
+          <div id="trainVisits"></div>
+          <button class="primary full-width" id="trainButton">Train model <span aria-hidden="true">→</span></button>
+          <p id="trainState" class="small" aria-live="polite"></p>
+        </article>
+        <article class="form-card"><h3>Results</h3><div id="modelReports"><p class="empty">No models yet</p></div></article>
+      </div>
+    </section>
+
+    <section id="page-dictation" class="page" role="region" aria-label="Dictation history" tabindex="-1" hidden>
+      <div class="section-heading"><h2>History</h2><span class="small">0 dictations</span></div>
+      <div class="history-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/></svg><h3>No dictations yet</h3><button class="quiet" data-page="dictation-settings">Settings <span aria-hidden="true">↗</span></button></div>
+    </section>
+    <section id="page-dictation-settings" class="page" role="region" aria-label="Dictation settings" tabindex="-1" hidden>
+      <div class="section-heading"><h2>Settings</h2></div>
+      <div class="settings-panel">
+        <article class="form-card"><div class="setting-row"><div><h3>Speech model</h3><p class="small">Dictation is in development.</p></div><span class="mode">Not configured</span></div></article>
+        <article class="form-card">
+          <h3>Recording shortcut</h3>
+          <label>Double-tap key<select id="hotkey"><option value="61">Right Option</option><option value="62">Right Control</option><option value="63">Fn / Globe</option></select></label>
+          <button id="enableShortcut" class="quiet">Enable shortcut</button>
+          <p id="hotkeyHelp" class="small">Applies to radar capture.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+  <script src="/static/training.js"></script>
+</body>
 </html>
