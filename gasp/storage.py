@@ -9,6 +9,7 @@ import uuid
 import math
 import shutil
 import numpy as np
+from .collection import capture_mode
 
 ID = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
 
@@ -234,7 +235,8 @@ class Store:
             cohort_id=collection.get("cohort_id"), acquisition_id=collection.get("acquisition_id"),
             training_task=step.get("training_task"),
             sample_kind="control" if step["articulation"] in {"rest", "negative"} else "speech",
-            required_duration_s=step["duration_s"] if step["articulation"] in {"rest", "negative"} else None,
+            capture_mode=capture_mode(step),
+            required_duration_s=step["duration_s"] if capture_mode(step) == "timed" else None,
             capture_conditions={k: step.get(k, collection.get(k)) for k in ("scene_id", "scene_name", "distance_cm", "position_notes", "location", "enclosure", "mount", "yaw_deg", "pitch_deg", "roll_deg")},
             script_sha256=collection["plan"].get("script_sha256"), task=collection["plan"].get("task", "phrases"))
 

@@ -42,7 +42,9 @@ def test_collection_finish_review_resume_cancel_and_audio(tmp_path):
             'deck_id':'commands-v1','mode':'paired','visit_role':'train','repetitions':2}}).json()['id']
         session = c.get('/api/sessions/'+sid).json()
         assert session['schema'] == 2 and session['collection']['plan']['mode'] == 'paired'
-        step = session['collection']['plan']['steps'][0]
+        # The shuffled deck also contains timed rest samples, which deliberately
+        # reject an early stop. This case exercises releasing a spoken phrase.
+        step = next(s for s in session['collection']['plan']['steps'] if s['articulation']=='voiced')
         time.sleep(.2)
         r = c.post('/api/collect',json={'step_id':step['step_id'],'duration_s':5,'reference_expected':True}).json()
         rid = r['id']

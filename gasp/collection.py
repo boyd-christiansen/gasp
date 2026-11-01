@@ -7,6 +7,22 @@ import hashlib
 PROTOCOL = "personal-training-v1"
 
 
+def capture_mode(step):
+    """Interaction is independent of whether the target is speech or motion.
+
+    Infer old immutable plans without rewriting their recorded definitions.
+    """
+    return step.get("capture_mode") or ("timed" if step.get("articulation") == "rest" or step.get("target_text") == "[typing]" else "hold")
+
+
+def capture_limit(step, raw=False):
+    # Repetition-based movements end on release; the duration hint in old plans
+    # was an estimate, not a deadline. Keep an explicit storage safety ceiling.
+    if step.get("articulation") == "negative" and capture_mode(step) == "hold":
+        return 25 if raw else 60
+    return step["duration_s"]
+
+
 def prompt(key, text, seconds=6, mode=None, instruction="", target=None):
     return dict(id=key, text=text, target=text if target is None else target,
                 duration_s=seconds, mode=mode, instruction=instruction)
@@ -92,6 +108,7 @@ def make_plan(deck_id, mode="silent", repetitions=2, seed=None, script_text=None
             plan.append(dict(step_id=uuid.uuid4().hex, prompt_id=p["id"], prompt_text=p["text"],
                 target_text=p["target"], duration_s=p["duration_s"], articulation=articulation,
                 instruction=p["instruction"], repetition=rep+1, pair_id=pair_id))
+            plan[-1]["capture_mode"] = "toggle" if deck_id == "reader" else capture_mode(plan[-1])
     return dict(protocol=PROTOCOL, deck_id=deck_id, deck_name=deck["name"], calibration=deck["calibration"],
                 mode=mode, repetitions=repetitions, seed=seed, steps=plan,
                 script_text=script or None, script_sha256=hashlib.sha256(script.encode()).hexdigest() if script else None,

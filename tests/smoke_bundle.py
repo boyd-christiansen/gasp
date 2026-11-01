@@ -22,8 +22,9 @@ def main():
         token = uuid.uuid4().hex + uuid.uuid4().hex
         env = dict(os.environ, GASP_APP_TOKEN=token, PYTHONNOUSERSITE='1')
         with (root/'worker.log').open('w+') as log:
+            parent = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.read()'], stdin=subprocess.PIPE)
             process = subprocess.Popen([str(app/'Contents/Resources/capture/gasp-capture'),
-                '--data', str(root/'data'), '--ready-file', str(root/'ready.json')],
+                '--data', str(root/'data'), '--ready-file', str(root/'ready.json'), '--parent-pid', str(parent.pid)],
                 cwd=root, env=env, stdout=log, stderr=log)
             try:
                 deadline = time.monotonic()+30
@@ -105,8 +106,14 @@ def main():
                 assert len(api('blocks')) == 1 and len(api('recordings')) == 4
                 assert any(m['id'] == report['id'] for m in api('models'))
                 api('disconnect','POST')
+                api('connect','POST',{'source':'simulator'})
+                parent.terminate(); parent.wait(timeout=5)
+                assert process.wait(timeout=10)==0, 'Worker must exit when its native parent disappears'
                 print('Standalone bundle: launch, scripts, capture, human review, reserved holdout, CPU training, plan authoring and permanent deletion passed (synthetic only)')
+                print('Native parent exit: capture worker stopped and released its source')
             finally:
+                if parent.poll() is None:
+                    parent.terminate(); parent.wait(timeout=5)
                 if process.poll() is None:
                     process.send_signal(signal.SIGINT)
                     try: process.wait(timeout=10)

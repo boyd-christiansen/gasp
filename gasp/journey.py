@@ -11,7 +11,7 @@ import time
 import uuid
 
 from pydantic import BaseModel, Field
-from .collection import make_plan
+from .collection import make_plan, capture_mode
 from .storage import atomic_json, checked_id
 from .profile import bundled_profile
 
@@ -93,7 +93,7 @@ def baseline_plan(key):
             ("negative", "Type naturally for a few seconds without speaking.", "[typing]"),
         ]:
             for _ in range(3):
-                add(text, mode, "control", duration=8, instruction="Hold Space for the full eight seconds.")
+                add(text, mode, "control", duration=8, instruction="Do not speak.")
                 steps[-1]["target_text"] = target
         plan = dict(protocol=VERSION, deck_id=key, deck_name=BASELINE[index]["name"], calibration=False,
                     mode="paired", repetitions=1, seed=VERSION, steps=steps, task="baseline",
@@ -101,6 +101,7 @@ def baseline_plan(key):
     plan["protocol"] = VERSION
     for i, step in enumerate(plan["steps"]):
         step["step_id"] = f"{key}-{i:03d}"
+        step["capture_mode"] = capture_mode(step)
     assert len(plan["steps"]) == BASELINE[index]["total"]
     return plan
 
@@ -164,7 +165,7 @@ def register_journey(app, store, engine):
                         continue
                     if step["articulation"] not in {"rest", "negative"} and norm(t.get("confirmed_text") or "") != norm(step["target_text"]):
                         continue
-                    if step["articulation"] in {"rest", "negative"} and t.get("capture_duration_s", t["duration_s"]) < step["duration_s"] * .8:
+                    if capture_mode(step) == "timed" and t.get("capture_duration_s", t["duration_s"]) < step["duration_s"] * .8:
                         continue
                     verified.add(t["plan_step_id"])
             complete = len(verified) == b["total"]

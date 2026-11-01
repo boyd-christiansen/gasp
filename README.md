@@ -23,7 +23,7 @@ Guided capture, then a shared timeline for audio, words and radar. [See the revi
 
 1. **[Install or launch Gasp](docs/GETTING_STARTED.md)** and connect the **Simulator** to practice without hardware.
 2. Open **Personal calibration**, start a session, confirm your setup, and enter the recorder.
-3. Follow the prompts: actions have a countdown and automatic stop; hold Space for speech. Review each take and choose **Verify & keep** or record it again.
+3. Follow the prompts: timed baselines stop automatically; hold Space for movements and speech, then release when finished. Review each take and choose **Verify & keep** or record it again.
 4. Work through **First speech → Return & repeat → Independent check**. Then add your own collections and train a phrase baseline with held-out sessions.
 
 The installed app supports a double tap of Right Option to record. Takes and reference audio stay on your Mac. The simulator checks the workflow; its results do not measure speech recognition.

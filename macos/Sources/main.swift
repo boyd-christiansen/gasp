@@ -5,7 +5,7 @@ import Speech
 import SwiftUI
 
 final class AudioReference {
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private let lock = NSLock()
     private var file: AVAudioFile?
     private var location: URL?
@@ -18,6 +18,7 @@ final class AudioReference {
     private var sampleRate: Double = 0
     private var channels: UInt32 = 0
     private var speechRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var cueTiming: [String:Any] = [:]
     private var ring: [(AVAudioPCMBuffer, AVAudioTime)] = []
     private var ringFrames: UInt32 = 0
     private var preRollSeconds: Double = 0
@@ -30,14 +31,21 @@ final class AudioReference {
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Settings.") }
         if warmed && engine.isRunning { return }
         if warmed { cool() }
-        let input = engine.inputNode
-        if input.isVoiceProcessingEnabled { try input.setVoiceProcessingEnabled(false) }
-        let format = input.outputFormat(forBus:0)
-        guard format.sampleRate>0, format.channelCount>0 else { throw failure("No microphone input is available.") }
-        sampleRate=format.sampleRate; channels=format.channelCount
-        input.installTap(onBus:0, bufferSize:1024, format:format) { [weak self] buffer, when in
+        // A stopped engine can retain a stale output format after the default
+        // input changes (for example 48 kHz → 24 kHz). Recreate it between visits.
+        engine = AVAudioEngine()
+        try GaspAudioInput.start(engine) { [weak self] buffer, when in
             guard let self else { return }
             self.lock.lock(); defer { self.lock.unlock() }
+            if self.file != nil && (buffer.format.sampleRate != self.sampleRate || buffer.format.channelCount != self.channels) {
+                self.writeError="The microphone format changed during this take. Record it again."
+                self.discontinuities += 1
+                return
+            }
+            if self.file == nil && (buffer.format.sampleRate != self.sampleRate || buffer.format.channelCount != self.channels) {
+                self.ring=[];self.ringFrames=0
+                self.sampleRate=buffer.format.sampleRate;self.channels=buffer.format.channelCount
+            }
             self.lastBuffer=ProcessInfo.processInfo.systemUptime
             if let data=buffer.floatChannelData {
                 var sum:Float=0
@@ -59,8 +67,7 @@ final class AudioReference {
                 }
             }
         }
-        do { engine.prepare(); try engine.start(); warmed=true }
-        catch { input.removeTap(onBus:0); throw error }
+        warmed=true
     }
     private func append(_ buffer:AVAudioPCMBuffer,_ when:AVAudioTime) {
         guard let f=file else { return }
@@ -70,7 +77,17 @@ final class AudioReference {
             if let expected=expectedSample,when.sampleTime != expected { discontinuities += 1 }
             expectedSample=when.sampleTime+Int64(buffer.frameLength)
         }
-        speechRequest?.append(buffer)
+        if let request=speechRequest, let ready=cueTiming["processing_start_host_ns"] as? UInt64, when.isHostTimeValid {
+            let start=AVAudioTime.seconds(forHostTime:when.hostTime)
+            let skip=min(Int(buffer.frameLength),max(0,Int(ceil((Double(ready)/1e9-start)*sampleRate))))
+            if skip == 0 { request.append(buffer) }
+            else if skip < Int(buffer.frameLength), let part=AVAudioPCMBuffer(pcmFormat:buffer.format,frameCapacity:buffer.frameLength-UInt32(skip)),
+                    let src=buffer.floatChannelData, let dst=part.floatChannelData {
+                part.frameLength=buffer.frameLength-UInt32(skip)
+                for c in 0..<Int(buffer.format.channelCount) { memcpy(dst[c],src[c]+skip,Int(part.frameLength)*MemoryLayout<Float>.size) }
+                request.append(part)
+            }
+        }
         do { try f.write(from:buffer);frames += Int64(buffer.frameLength) }
         catch { writeError=error.localizedDescription }
     }
@@ -78,13 +95,14 @@ final class AudioReference {
         guard stopped,location == nil else { throw failure("Finish the previous audio reference first.") }
         try prepare()
         guard status()["ready"] as? Bool == true else { throw failure("Microphone is warming up. Wait for the input meter, then try again.") }
+        lock.lock();defer { lock.unlock() }
         let url=FileManager.default.temporaryDirectory.appendingPathComponent("gasp-audio-\(UUID().uuidString).wav")
         let settings:[String:Any]=[AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:sampleRate,
             AVNumberOfChannelsKey:channels,AVLinearPCMBitDepthKey:32,AVLinearPCMIsFloatKey:true,AVLinearPCMIsNonInterleaved:false]
         let output=try AVAudioFile(forWriting:url,settings:settings,commonFormat:.pcmFormatFloat32,interleaved:false)
-        lock.lock();defer { lock.unlock() }
         file=output;location=url;firstHost=nil;firstSample=nil;expectedSample=nil
         frames=0;discontinuities=0;writeError=nil;speechRequest=speech;stopped=false
+        cueTiming=["cue_protocol":"short-tone-v1"]
         preRollSeconds=Double(ringFrames)/sampleRate
         for (buffer,time) in ring { append(buffer,time) }
     }
@@ -92,17 +110,19 @@ final class AudioReference {
         lock.lock();let request=speechRequest;speechRequest=nil;file=nil;stopped=true;lock.unlock()
         request?.endAudio()
     }
+    func markCue(_ timing:[String:Any]) { lock.lock();cueTiming=timing;lock.unlock() }
     func cool() {
         stop()
-        if warmed { engine.stop();engine.inputNode.removeTap(onBus:0);warmed=false }
+        if warmed { GaspAudioInput.stop(engine);warmed=false }
         lock.lock();ring=[];ringFrames=0;level=0;lastBuffer=0;lock.unlock()
     }
     func status() -> [String:Any] {
         lock.lock()
-        let rms=level, recent=ProcessInfo.processInfo.systemUptime-lastBuffer < 0.6
+        let rms=level, rate=sampleRate, recent=ProcessInfo.processInfo.systemUptime-lastBuffer < 0.6
         lock.unlock()
         return ["ready":warmed && engine.isRunning && recent,
-            "level":rms,"sample_rate_hz":sampleRate,"microphone_mode":mode(),
+            "needs_restart":warmed && !engine.isRunning,
+            "level":rms,"sample_rate_hz":rate,"microphone_mode":mode(),
             "device":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Mac sound input",
             "voice_processing":engine.inputNode.isVoiceProcessingEnabled]
     }
@@ -124,7 +144,7 @@ final class AudioReference {
             "sample_discontinuities":discontinuities,"duration_s":Double(frames)/sampleRate,
             "microphone_mode":mode(),"voice_processing":engine.inputNode.isVoiceProcessingEnabled,
             "device":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Mac sound input",
-            "pre_roll_s":preRollSeconds,"alignment":"Host-clock audio anchor; radar transport latency remains unmeasured."])
+            "pre_roll_s":preRollSeconds,"alignment":"Host-clock audio anchor; radar transport latency remains unmeasured."].merging(cueTiming) { _,new in new })
     }
     func discard() { stop();if let url=location { try? FileManager.default.removeItem(at:url) };location=nil }
 }
@@ -168,6 +188,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var panel: NSPanel!
     let audio = AudioReference()
     let speech = SpeechReference()
+    let startCue = StartCue()
     var worker: Process?
     var workerLog: FileHandle?
     var readyFile: URL!
@@ -244,7 +265,8 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         workerLog = try FileHandle(forWritingTo:logURL); try workerLog?.truncate(atOffset:0)
         readyFile = FileManager.default.temporaryDirectory.appendingPathComponent("gasp-ready-\(UUID().uuidString).json")
         let process = Process(); process.executableURL = executable
-        process.arguments = ["--data",support.appendingPathComponent("Recordings").path,"--ready-file",readyFile.path]
+        process.arguments = ["--data",support.appendingPathComponent("Recordings").path,"--ready-file",readyFile.path,
+            "--parent-pid",String(ProcessInfo.processInfo.processIdentifier)]
         var env = ProcessInfo.processInfo.environment; env["GASP_APP_TOKEN"] = token
         env["PYTHONNOUSERSITE"] = "1"; process.environment = env
         process.standardOutput = workerLog; process.standardError = workerLog
@@ -296,7 +318,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     guard let sid = body["sid"] as? String,let tid = body["tid"] as? String,
                           sid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil,
                           tid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil else { throw failure("Invalid recording identifier.") }
-                    var request = URLRequest(url:URL(string:"/api/sessions/\(sid)/trials/\(tid)/media",relativeTo:base)!.absoluteURL)
+                    var request = URLRequest(url:URL(string:"/api/sessions/\(sid)/trials/\(tid)/media?processing=true",relativeTo:base)!.absoluteURL)
                     request.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization")
                     let (download,response) = try await URLSession.shared.download(for:request)
                     guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw failure("Reference audio is unavailable.") }
@@ -304,6 +326,14 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     try FileManager.default.moveItem(at:download,to:local)
                     defer { try? FileManager.default.removeItem(at:local) }
                     result = try await speech.align(url:local)
+                    let start=Double((response as? HTTPURLResponse)?.value(forHTTPHeaderField:"X-Audio-Processing-Start-S") ?? "0") ?? 0
+                    if var aligned=result as? [String:Any], let words=aligned["words"] as? [[String:Any]] {
+                        aligned["words"]=words.map { word -> [String:Any] in
+                            var shifted=word;shifted["start"]=(word["start"] as? Double ?? 0)+start
+                            shifted["end"]=(word["end"] as? Double ?? 0)+start;return shifted
+                        }
+                        result=aligned
+                    }
                 case "audioPrepare": try audio.prepare(); result=audio.status()
                 case "audioStatus": result=audio.status()
                 case "audioCool": audio.cool()
@@ -322,7 +352,8 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     let (data,response) = try await URLSession.shared.upload(for:request,fromFile:url)
                     guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw failure("Audio attachment failed: \(String(data:data,encoding:.utf8) ?? "unknown error")") }
                     audio.discard(); result = ["ok":true]
-                case "cue": NSSound(named:"Pop")?.play()
+                case "cue":
+                    let timing=try await startCue.play();audio.markCue(timing);result=timing
                 case "status":
                     recording = body["active"] as? Bool ?? false
                     let title = body["status"] as? String ?? "Ready"

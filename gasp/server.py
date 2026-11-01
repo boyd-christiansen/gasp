@@ -19,7 +19,7 @@ from .features import FeatureSpec
 from .profile import bundled_profile, parse_profile
 from .storage import Store, atomic_json, checked_id
 from . import training
-from .collection import DECKS, make_plan
+from .collection import DECKS, make_plan, capture_mode, capture_limit
 from .transport import ports
 from .replay import Replay
 from . import __version__
@@ -96,7 +96,7 @@ class DeleteCollection(BaseModel):
 
 
 class CaptureEvent(BaseModel):
-    name: str = Field(pattern="^(cue_shown|speech_start|speech_end|key_down|key_up|reader_marker)$")
+    name: str = Field(pattern="^(cue_shown|cue_finished|speech_start|speech_end|key_down|key_up|reader_marker)$")
     estimated_server_ns: int = Field(gt=0)
     uncertainty_ms: float = Field(ge=0, le=60000)
     word_index: int | None = Field(default=None, ge=0, le=100000)
@@ -449,7 +449,8 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
                 raise ValueError("Enable the reference microphone in Settings for this aloud reference")
             extra["reference_expected"] = body.reference_expected
             extra.update(capture_method=body.capture_method, reader_follow=body.reader_follow, reader_wpm=body.reader_wpm)
-            return engine.record(step["target_text"] or "[untranscribed speech]", body.duration_s or step["duration_s"], step["articulation"], "", extra)
+            limit = capture_limit(step, engine.session["source"] == "dca1000")
+            return engine.record(step["target_text"] or "[untranscribed speech]", body.duration_s or limit, step["articulation"], "", extra)
 
     @app.get("/api/sessions/{sid}/trials")
     def trials(sid: str):
@@ -501,8 +502,8 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
             step = next(s for s in collection["plan"]["steps"] if s["step_id"] == take["plan_step_id"])
             if not session["synthetic"] and step["articulation"] == "voiced" and not take.get("media"):
                 raise ValueError("This aloud reference has no audio. Reject it and record again with the microphone enabled.")
-            if step["articulation"] in {"rest", "negative"} and take.get("capture_duration_s", take["duration_s"]) < .8 * step["duration_s"]:
-                raise ValueError("This movement reference is too short. Reject it and record the full prompt again.")
+            if capture_mode(step) == "timed" and take.get("capture_duration_s", take["duration_s"]) < .8 * step["duration_s"]:
+                raise ValueError("This timed reference is too short. Reject it and record the full countdown again.")
             normalize = lambda text: re.sub(r"[^\w]+", " ", text.casefold()).strip()
             if step["articulation"] not in {"rest", "negative"} and normalize(body.confirmed_text or take.get("confirmed_text") or "") != normalize(step["target_text"]):
                 raise ValueError("This baseline take needs the prompted text. Save a draft or reject the take, then record it again.")
@@ -519,7 +520,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.post("/api/sessions/{sid}/trials/{tid}/suggest-timing")
     def suggest_timing(sid: str, tid: str, body: dict):
-        from .audio_review import analyze_audio, acoustic_words, propose_words, is_control
+        from .audio_review import analyze_audio, acoustic_words, propose_words, is_control, processing_window
         path = store.trial_dir(sid, tid)
         take = json.loads((path/"trial.json").read_text())
         if is_control(take) or take.get("articulation") == "silent":
@@ -533,10 +534,12 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         recognized = body.get("recognized", [])
         if not isinstance(recognized,list) or len(recognized)>3000 or any(not isinstance(w,dict) for w in recognized):
             raise ValueError("Invalid recognition result")
+        start = processing_window(take)['start_s']
+        recognized = [w for w in recognized if float(w.get('start_s', w.get('start', 0))) >= start]
         words = propose_words(text, recognized, offset, take['duration_s'])
         message = "Matched words have draft timing. Unmatched words remain unplaced."
         if '·' in take.get('prompt_text','') and take.get('media',{}).get('file','').endswith('.wav'):
-            acoustic = acoustic_words(text, analyze_audio(path/take['media']['file']), offset, take['duration_s'])
+            acoustic = acoustic_words(text, analyze_audio(path/take['media']['file'], start), offset, take['duration_s'])
             if acoustic:
                 words = acoustic
                 message = "Syllable timing estimated from sound bursts. Listen and adjust the draft boundaries."
@@ -618,11 +621,26 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         return media_fields
 
     @app.get("/api/sessions/{sid}/trials/{tid}/media")
-    def get_media(sid: str, tid: str):
+    def get_media(sid: str, tid: str, processing: bool = False):
         path = store.trial_dir(sid, tid)
         meta = json.loads((path/"trial.json").read_text())
         if not meta.get("media"):
             raise HTTPException(404, "No reference media")
+        if processing and meta['media']['file'].endswith('.wav'):
+            import io
+            import warnings
+            from scipy.io import wavfile
+            from .audio_review import processing_window
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', wavfile.WavFileWarning)
+                rate, samples = wavfile.read(path / meta['media']['file'])
+            first = min(len(samples), int(np.ceil(processing_window(meta)['start_s']*rate)))
+            if first == len(samples):
+                raise ValueError('No audio remains after the start cue. Record a longer take.')
+            buffer = io.BytesIO()
+            wavfile.write(buffer, rate, samples[first:])
+            return Response(buffer.getvalue(), media_type='audio/wav',
+                headers={'X-Audio-Processing-Start-S':str(first/rate)})
         return FileResponse(path / meta["media"]["file"])
 
     @app.post("/api/train")

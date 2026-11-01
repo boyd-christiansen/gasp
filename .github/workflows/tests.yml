@@ -42,6 +42,8 @@ jobs:
           uv sync --frozen --extra dev --extra macos-build
           swiftc macos/Sources/RecordingGesture.swift macos/tests/main.swift -o /tmp/gasp-gesture-tests
           /tmp/gasp-gesture-tests
+          clang -fobjc-arc -framework AVFoundation -framework Foundation macos/Sources/AudioInput.m tests/audio_input_boundary.m -o /tmp/gasp-audio-input-tests
+          /tmp/gasp-audio-input-tests
           ./scripts/build-macos.sh
           codesign --verify --deep --strict dist/Gasp.app
           .venv/bin/python tests/smoke_bundle.py dist/Gasp.app

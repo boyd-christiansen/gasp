@@ -7,6 +7,7 @@ import json
 import re
 import warnings
 import numpy as np
+from .collection import capture_mode
 from scipy.io import wavfile
 from scipy.ndimage import uniform_filter1d, binary_closing, binary_opening
 from scipy.signal import find_peaks
@@ -20,7 +21,24 @@ def is_control(take):
     return take.get("articulation") in {"rest", "negative"}
 
 
-def analyze_audio(path):
+def processing_window(take):
+    """Audio-relative exclusion; never changes the original WAV or radar clock."""
+    timing = (take.get('media') or {}).get('native_audio_timing') or {}
+    first = timing.get('first_sample_host_ns')
+    end = timing.get('processing_start_host_ns')
+    source = 'cue_completion' if end else None
+    if first and not end and not timing.get('cue_protocol'):
+        cue = next((e for e in take.get('capture_events', []) if e['name']=='cue_shown'), None)
+        if cue:
+            # Older builds played macOS Pop without recording its completion.
+            # Its audible portion is ~210 ms; allow output latency and decay.
+            end = cue['estimated_server_ns'] + 400_000_000
+            source = 'legacy_pop_estimate'
+    start = max(0, (end-first)/1e9) if first and end else 0
+    return dict(start_s=min(start, timing.get('duration_s', take['duration_s'])), source=source)
+
+
+def analyze_audio(path, start_s=0):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", wavfile.WavFileWarning)
         rate, x = wavfile.read(path)
@@ -38,32 +56,44 @@ def analyze_audio(path):
     padded = np.pad(x, (0, (-len(x)) % size)).reshape(-1, size)
     rms = np.sqrt(np.mean(padded*padded, axis=1))
     envelope = uniform_filter1d(rms, 3)
-    peak = float(np.max(np.abs(x)))
-    threshold = max(.001, float(np.percentile(envelope, 20))*4, float(envelope.max())*.065)
+    start_frame = min(len(x), max(0, int(np.ceil(start_s*rate))))
+    signal = x[start_frame:]
+    # Exclude the cue before threshold/peak estimation, not after detecting it.
+    # Leave the time axis intact so suggestions stay in original audio time.
+    first_bin = min(len(envelope), max(0, int(np.ceil(start_s/.01))))
+    envelope[:first_bin] = 0
+    tail = envelope[first_bin:]
+    peak = float(np.max(np.abs(signal))) if len(signal) else 0
+    # A continuous utterance can occupy the entire window: its quiet percentile
+    # is not necessarily background noise. Never set the gate above the signal.
+    threshold = max(.0003, min(float(np.percentile(tail, 20))*2,
+                              float(tail.max())*.2)) if len(tail) else .0003
     active = binary_opening(binary_closing(envelope > threshold, structure=np.ones(3)), structure=np.ones(3))
     edges = np.diff(np.r_[False, active, False].astype(int))
-    regions = [[max(0, int(a)*.01-.02), min(len(x)/rate, int(b)*.01+.02)]
+    regions = [[max(start_s, int(a)*.01-.02), min(len(x)/rate, int(b)*.01+.02)]
                for a,b in zip(np.where(edges == 1)[0], np.where(edges == -1)[0]) if b-a >= 5]
     peaks, _ = find_peaks(envelope, distance=12, prominence=max(threshold, float(envelope.max())*.10))
     peaks = [int(p) for p in peaks if active[p]]
     return dict(duration_s=len(x)/rate, sample_rate_hz=int(rate), peak=peak,
-                clipped_fraction=float(np.mean(abs(x)>=.995)), active_s=float(active.sum()*.01),
+                clipped_fraction=float(np.mean(abs(signal)>=.995)) if len(signal) else 0, active_s=float(active.sum()*.01),
+                audible_s=float(np.sum(envelope > .001)*.01),
                 regions=regions, peaks_s=[p*.01 for p in peaks], peak_strengths=[float(envelope[p]) for p in peaks], envelope=envelope.tolist())
 
 
 def inspect_take(store, sid, tid):
     path = store.trial_dir(sid, tid)
     take = json.loads((path/'trial.json').read_text())
-    result = {'kind':'control' if is_control(take) else 'speech', 'warnings':[], 'audio':None}
+    result = {'kind':'control' if is_control(take) else 'speech', 'warnings':[], 'audio':None,
+              'processing_window':processing_window(take)}
     if take.get('frame_gaps'):
         result['warnings'].append({'code':'radar_gap','message':f"{take['frame_gaps']} missing radar frame(s). Red bands mark these gaps."})
-    planned = take.get('required_duration_s')
-    if is_control(take) and not planned:
+    planned = take.get('required_duration_s') if capture_mode(take) == 'timed' else None
+    if capture_mode(take) == 'timed' and not planned:
         steps=store.session(sid).get('collection',{}).get('plan',{}).get('steps',[])
         planned=next((s['duration_s'] for s in steps if s['step_id']==take.get('plan_step_id')),None)
     duration = take.get('capture_duration_s', take['duration_s'])
     if is_control(take) and planned and duration < .8*planned:
-        result['warnings'].append({'code':'too_short','message':f"Recorded {duration:.1f} s; this action needs {planned:g} s. Record it again."})
+        result['warnings'].append({'code':'too_short','message':f"Recorded {duration:.1f} s; this timed reference needs {planned:g} s. Record it again."})
     media = take.get('media')
     if not media:
         if take.get('reference_expected') and not take.get('synthetic'):
@@ -77,7 +107,7 @@ def inspect_take(store, sid, tid):
     if not media['file'].endswith('.wav'):
         return result
     try:
-        a = analyze_audio(path/media['file'])
+        a = analyze_audio(path/media['file'], result['processing_window']['start_s'])
     except (ValueError, OSError) as exc:
         result['warnings'].append({'code':'unreadable_audio','message':f'Cannot inspect reference audio: {exc}'})
         return result
@@ -85,10 +115,10 @@ def inspect_take(store, sid, tid):
     if not is_control(take) and take.get('articulation') in {'voiced','whisper'}:
         tokens = speech_tokens(take.get('target_text') or take.get('label',''))
         phonetic = take.get('prompt_id') in {'plosives','nasals','fricatives','vowels'} or '·' in take.get('prompt_text','')
-        if a['active_s'] < .18:
-            result['warnings'].append({'code':'quiet_audio','message':'Very little speech-level audio was captured. Check the input meter and record again.'})
+        if a['audible_s'] < .18:
+            result['warnings'].append({'code':'quiet_audio','message':'The microphone level is very low. Listen to check that the full prompt is audible; this level check cannot tell whether speech is missing.'})
         elif phonetic and len(a['peaks_s']) < max(2, len(tokens)*.5):
-            result['warnings'].append({'code':'incomplete_reference','message':f"Only {len(a['peaks_s'])} clear sound bursts for {len(tokens)} prompted sounds. Listen now; some syllables may be missing."})
+            result['warnings'].append({'code':'incomplete_reference','message':f"Automatic timing found {len(a['peaks_s'])} distinct sound peaks for {len(tokens)} prompted sounds. Sounds can blend together; listen to check the take before continuing."})
         if a['clipped_fraction'] > .005:
             result['warnings'].append({'code':'clipping','message':'Reference audio is clipping. Lower the microphone input level and record again.'})
     return result
