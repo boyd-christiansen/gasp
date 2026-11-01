@@ -34,7 +34,7 @@ There are nine printable STL designs; the largest part is 214 × 195 mm in its s
 The latest standalone USB enclosure is **v2.2**. It adds clearance for the USB cable's molded strain relief, keeps the TP20 test-point opening, and refines the aperture keys and desktop mount. It holds the **IWR6843AOPEVM only**; use the full capture stack above for MMWAVEICBOOST + DCA1000EVM.
 
 <p>
-  <img src="../enclosure/iwr6843aop/renders/v2_2_desktop.png" alt="Single-board v2.2 enclosure on the desktop stand" width="300">
+  <img src="../enclosure/iwr6843aop/renders/v2_2_desktop_front.png" alt="Front view of the single-board v2.2 enclosure on the desktop stand" width="300">
   <img src="../enclosure/iwr6843aop/renders/v2_2_mount_installation.png" alt="Installation of the fitted v2.2 mount and preload clip" width="300">
 </p>
 
