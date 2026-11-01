@@ -15,11 +15,13 @@ mkdir -p .cache/swift .cache/clang build/macos dist
 app="$PWD/dist/Gasp.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp macos/Info.plist "$app/Contents/Info.plist"
+cp macos/Resources/Gasp.icns "$app/Contents/Resources/Gasp.icns"
+cp gasp/static/brand/face-*.png "$app/Contents/Resources/"
 rm -rf "$app/Contents/Resources/capture"
 ditto build/macos/worker/gasp-capture "$app/Contents/Resources/capture"
 swiftc -swift-version 5 -O -module-cache-path "$SWIFT_MODULECACHE_PATH" \
   -framework AppKit -framework WebKit -framework AVFoundation -framework SwiftUI -framework Speech \
-  macos/Sources/RecordingGesture.swift macos/Sources/SpeechReference.swift macos/Sources/main.swift -o "$app/Contents/MacOS/Gasp"
+  macos/Sources/RecordingGesture.swift macos/Sources/SpeechReference.swift macos/Sources/LogoParticles.swift macos/Sources/main.swift -o "$app/Contents/MacOS/Gasp"
 .venv/bin/python scripts/collect-app-licenses.py "$app/Contents/Resources/ThirdPartyLicenses"
 codesign --force --deep --sign - "$app"
 print "Built $app"

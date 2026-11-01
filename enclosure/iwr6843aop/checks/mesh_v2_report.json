@@ -1,0 +1,284 @@
+{
+  "01_rear_flat.stl": {
+    "triangles": 4438,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      35996.56063271179
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      60.0,
+      173.87044,
+      14.0
+    ]
+  },
+  "02_sliding_front.stl": {
+    "triangles": 2602,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      19026.579730966838
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      60.0,
+      173.87044,
+      17.29364
+    ]
+  },
+  "03_aperture_shroud.stl": {
+    "triangles": 1230,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      3086.5765331077
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      55.8,
+      55.8,
+      13.65
+    ]
+  },
+  "04_locking_key_single.stl": {
+    "triangles": 140,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      69.70746846470001
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      9.100000000000001,
+      7.0,
+      2.6
+    ]
+  },
+  "05_detachable_heel.stl": {
+    "triangles": 668,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      9632.003680862732
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      26.0,
+      20.4,
+      29.0
+    ]
+  },
+  "06_heel_keeper.stl": {
+    "triangles": 140,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      357.73298285759904
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      22.0,
+      5.0,
+      17.4
+    ]
+  },
+  "07_socket_4p50_nominal.stl": {
+    "triangles": 724,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      379.77765047102116
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      10.786850000000001,
+      10.79342,
+      10.6
+    ]
+  },
+  "PRINT_FIRST_fit_coupons.stl": {
+    "triangles": 3128,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 10,
+    "component_volume_mm3": [
+      1144.1599999999992,
+      596.1667732517501,
+      1032.4553068405626,
+      282.7466128302912,
+      68.94229296469986,
+      69.70746846469999,
+      70.47264396470011,
+      388.6453467752094,
+      379.77775414477225,
+      370.48506825393827
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      64.38685,
+      46.0,
+      14.0
+    ]
+  },
+  "coupon_shroud_leg.stl": {
+    "triangles": 182,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      282.7466165291926
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      4.0,
+      9.0,
+      13.65
+    ]
+  },
+  "coupon_shroud_receiver.stl": {
+    "triangles": 260,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      1032.4553068405598
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      8.0,
+      13.0,
+      14.0
+    ]
+  },
+  "coupon_slider_front.stl": {
+    "triangles": 72,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      596.1667732517499
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      13.0,
+      17.0,
+      10.84364
+    ]
+  },
+  "coupon_slider_rear.stl": {
+    "triangles": 52,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      1144.16
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      13.0,
+      17.0,
+      14.0
+    ]
+  },
+  "key_3p05_loose_trial.stl": {
+    "triangles": 140,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      68.9422929647
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      9.100000000000001,
+      7.0,
+      2.6
+    ]
+  },
+  "key_3p35_snug_trial.stl": {
+    "triangles": 140,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      70.47264396470001
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      9.100000000000001,
+      7.0,
+      2.6
+    ]
+  },
+  "socket_4p35_snug_trial.stl": {
+    "triangles": 722,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      388.64530042566776
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      10.786850000000001,
+      10.79342,
+      10.6
+    ]
+  },
+  "socket_4p65_loose_trial.stl": {
+    "triangles": 696,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 1,
+    "component_volume_mm3": [
+      370.485065832285
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      10.786850000000001,
+      10.79342,
+      10.6
+    ]
+  },
+  "three_socket_trials.stl": {
+    "triangles": 2142,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 3,
+    "component_volume_mm3": [
+      388.6453744204311,
+      379.77765047102116,
+      370.48516325290007
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      40.78685,
+      10.79342,
+      10.6
+    ]
+  },
+  "two_locking_keys.stl": {
+    "triangles": 280,
+    "watertight": true,
+    "consistent_winding": true,
+    "connected_parts": 2,
+    "component_volume_mm3": [
+      69.70746846470001,
+      69.70746846469994
+    ],
+    "each_part_on_bed": true,
+    "bounds_mm": [
+      24.099999999999998,
+      7.0,
+      2.6
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "center_xy_mm": [
+    -7.1422360000000005,
+    5.685857
+  ],
+  "relief_diameter_mm": 6.0,
+  "STEP_comparison_tolerance_mm": 0.001,
+  "previous_volume_mm3": 36108.09817239282,
+  "updated_volume_mm3": 36045.0162290457,
+  "previous_bounds_mm": [
+    60.00000020000002,
+    174.0000001,
+    14.000000200000018
+  ],
+  "previous_shell_overlap_with_TP20_mm3": 10.726118964938227,
+  "updated_shell_overlap_with_TP20_mm3": 0.0,
+  "updated_shell_minimum_clearance_to_TP20_envelope_mm": 0.8786796564403563,
+  "removed_volume_mm3": 63.081948019143944,
+  "added_volume_mm3": 0,
+  "removed_outside_local_relief_mm3": 0,
+  "board_support_height_mm": 10.4,
+  "new_bounds_mm": [
+    60.00000020000002,
+    174.0000001,
+    14.000000200000018
+  ],
+  "board_insertion_overlaps_mm3": {
+    "0": 0.0,
+    "0.25": 0.0,
+    "0.5": 0.0,
+    "1": 0.0,
+    "2": 0.0,
+    "4": 0.0,
+    "8": 0.0,
+    "16": 0.0
+  },
+  "actual_physical_fit_verified": false
+}

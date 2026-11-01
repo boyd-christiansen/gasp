@@ -1,5 +1,7 @@
 # Gasp · Mac app
 
+For the setup, collection and review flow, see [Collection guide](COLLECTIONS.md).
+
 Gasp collects and reviews personal radar training data. The installed Mac app bundles its capture engine and stores recordings locally. Radar dictation and text insertion remain disabled.
 
 ## Capture
@@ -7,11 +9,11 @@ Gasp collects and reviews personal radar training data. The installed Mac app bu
 **Radar data** has two tabs: **Capture** and **Training**. Capture's collapsible left library contains saved takes. **Settings** is at the bottom left and contains hardware, optional reference audio, and the recording shortcut. Dictation has a separate empty history until a decoder is available.
 
 1. Open `~/Applications/Gasp.app`. In **Settings**, connect the Simulator to practice, or select the physical USB/DCA source and its ports/profile. Simulator data is explicitly marked and cannot establish speech accuracy.
-2. Choose **New capture**. Select a built-in calibration/phrase script, enter your own words and short phrases (one per line), or choose **Reader** and paste/import a text document.
-3. Save the capture conditions: person, distance, location, enclosure, mount, yaw/pitch/roll and placement notes. A recording block retains the exact radar configuration, source, ordered script, script hash and available firmware information. Start another block after changing setup or on another acquisition day.
+2. Follow the guided Capture cards: **Personal calibration → First speech → Return & repeat → Independent check**. Open a collection, start a session, confirm your setup, and enter the recorder. **New type** becomes available after the baseline is reviewed.
+3. Settings stores the usual person, distance, location, enclosure, mount, yaw/pitch/roll and placement notes. Each session retains its own setup snapshot, exact radar configuration, source, ordered script and available firmware information. Start another session after changing setup or on another acquisition day.
 4. Optionally enable **Record microphone with each take** in Settings. macOS requests microphone access. Audio is a reference for annotation; it is never an input to the radar model.
-5. For words/phrases, **hold Space or the record button**, wait for Recording/the readiness sound, perform the prompt, then release. For Reader, click **Start passage**, read naturally, then **Finish passage**. Cancel or Escape discards the training take. A minimum radar window is retained for a usable sample; releasing before readiness cancels.
-6. Saved takes advance the script and remain **pending review**. Click a take in the library to inspect it. Confirm the actual words, preserve fillers/repetitions, and choose **Verify & keep**. Reject uncertain or corrupted takes. A rejected prompt becomes available for another attempt.
+5. For words/phrases, **hold Space or the record button**, wait for Recording/the readiness sound, perform the prompt, then release. For rest/movement, press Space once: a three-second countdown precedes the full timed action, then recording stops automatically. Reader uses Space to start and finish a passage. Cancel or Escape cancels the take.
+6. Saved takes remain **pending review**. Immediate capture checks pause on problems so you can retry before continuing. Open a take in the library, confirm the actual words, preserve fillers/repetitions, and choose **Verify & keep**. Actions are reviewed without transcripts or word annotations. Reject uncertain or corrupted takes; a rejected prompt becomes available again.
 
 The optional global shortcut uses a double tap of Right Option (Right Control or Fn/Globe are alternatives) to begin and one tap to finish. Enable it in Settings and grant Input Monitoring if desired. Buttons and Space work without that permission. Modifier-plus-typing does not count as a tap.
 
@@ -21,7 +23,7 @@ Reader preserves document order and divides text into resumable passages of at m
 
 Choose paced highlighting at 50–300 words/minute, manual scrolling, or **Follow voice · on device**. Voice following requires the installed app, reference audio, macOS speech permission, and an available local language model. It follows approximate recognized progress through the displayed script; it does not confirm the transcript or create word boundaries. Silent reading uses paced/manual mode. Speech assistance has no network fallback. If recognition stops, finish manually and choose another scroll mode for the next take.
 
-Use **Continue a saved script** under New capture, or **Continue script** while reviewing a take, after connecting the same source/profile. Pending captured passages count as completed; rejected passages can be retaken. Progress survives restarts. Imports are plain text, limited to 200,000 characters per block; import another chapter/block for larger books.
+Open the named collection and choose **Resume session**, using the original source/profile. Pending captured passages count as captured; rejected passages can be retaken. Progress survives restarts. Imports are plain text, limited to 200,000 characters per session; import another chapter for larger books.
 
 ## Review: one player for radar, audio and text
 
@@ -36,9 +38,9 @@ The playhead drives the radar visualization, audio waveform and word track toget
 | Command-Z | Undo a word edit in the current review |
 | + / − | Zoom the timeline |
 
-**Use script** copies intended text only. It creates untimed words; their timing is not evenly guessed. Place their boundaries manually or use an alignment source. Unplaced words remain selectable below the track. Whole-passage verified text is valid supervision even without word timing.
+**Use script** copies intended text only. Whole-passage verified text is valid supervision even without word timing. Select an untimed word and drag across its sound on the audio waveform, or set its boundaries with `[` / `]`. Draft intervals and an unfinished start marker are shown directly on the timeline.
 
-**Suggest word timing · on device** runs optional local speech recognition on saved reference audio. Long audio is processed in 45-second chunks, retaining offsets in original audio time. These are ASR estimates, not forced alignment against a corrected transcript. They remain pending until reviewed. If recognized words differ from existing reviewed text, the app preserves your text and asks you to reconcile them. Raw ASR text is retained separately.
+Aloud review automatically suggests timing from local reference audio; **Auto-place words** reruns it. On-device speech recognition estimates are matched to the existing transcript, preserving its text and leaving unmatched words untimed. Isolated syllable exercises can use acoustic peaks as draft boundaries. These are estimates, not forced alignment, and remain pending until reviewed. Long recognition jobs use 45-second chunks with offsets retained in original audio time. Silent takes do not inherit aloud word boundaries.
 
 For an external forced aligner, import JSON with `timebase: "audio"` or `"radar"` and a `words` array of `{ "text": "hello", "start": 1.2, "end": 1.6 }`. Montreal Forced Aligner's JSON `tiers.words.entries` format is also accepted. The aligner itself is not bundled. Imported word text must match existing reviewed text. Intervals must be ordered, non-overlapping and inside the radar take. Silent takes have intended/manual labels, not audio-established articulation boundaries.
 

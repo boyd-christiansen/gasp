@@ -1,0 +1,86 @@
+{
+  "revision": "v2.1 hardware-free prototype \u2014 TP20 rear-shell clearance",
+  "date": "2026-11-01",
+  "cad_runtime": "cadgen 0.8.4 / build123d",
+  "board_reference": "TI SPRR418A / PROC091G; component envelopes, not fully populated vendor CAD",
+  "models": {
+    "assembly": "ad831a99-5a73-59c0-87eb-c1d96222cb3c",
+    "on_existing_stand": "113f6603-c259-5202-a46a-025b73178759",
+    "insert_installation": "88aea722-55b2-5693-94f4-42bb9d990dc9",
+    "fit_coupons": "1062cec5-3ec6-522b-b760-a82170348d17"
+  },
+  "printed_part_count_in_case": 8,
+  "metal_hardware_count": 0,
+  "adhesive_required_by_design": false,
+  "body_width_mm": 60,
+  "body_height_mm": 174,
+  "cover_slide_mm": 6,
+  "heel_slide_mm": 7,
+  "nominal_capture_clearance_mm": 0.15,
+  "mechanical_verification": "PASS",
+  "mesh_files_verified": 18,
+  "measurements_mm": {
+    "horn_to_RF_envelope": 0.5851068389082554,
+    "horn_to_chip": 2.519042274310216,
+    "horn_to_PCB": 1.2744,
+    "rear_to_PCB_contact": 0.0,
+    "PCB_to_upper_pads": 0.15000000000000036,
+    "horn_seat_contact": 0.0,
+    "heel_to_rear_contact": 0.0
+  },
+  "physical_print_fit_verified": false,
+  "rf_performance_verified": false,
+  "primary_print_file_quantities": {
+    "01_rear_flat.stl": 1,
+    "02_sliding_front.stl": 1,
+    "03_aperture_shroud.stl": 1,
+    "05_detachable_heel.stl": 1,
+    "06_heel_keeper.stl": 1,
+    "key_3p35_snug_trial.stl": 2,
+    "socket_4p35_snug_trial.stl": 1
+  },
+  "fit_options": "Use two keys of the width and one sleeve of the bore that fit the physical coupons. Do not print all socket alternatives for final assembly.",
+  "readme": "README_v2.md",
+  "tp20_clearance_check": {
+    "status": "PASS",
+    "center_xy_mm": [
+      -7.1422360000000005,
+      5.685857
+    ],
+    "relief_diameter_mm": 6.0,
+    "STEP_comparison_tolerance_mm": 0.001,
+    "previous_volume_mm3": 36108.09817239282,
+    "updated_volume_mm3": 36045.0162290457,
+    "previous_bounds_mm": [
+      60.00000020000002,
+      174.0000001,
+      14.000000200000018
+    ],
+    "previous_shell_overlap_with_TP20_mm3": 10.726118964938227,
+    "updated_shell_overlap_with_TP20_mm3": 0.0,
+    "updated_shell_minimum_clearance_to_TP20_envelope_mm": 0.8786796564403563,
+    "removed_volume_mm3": 63.081948019143944,
+    "added_volume_mm3": 0,
+    "removed_outside_local_relief_mm3": 0,
+    "board_support_height_mm": 10.4,
+    "new_bounds_mm": [
+      60.00000020000002,
+      174.0000001,
+      14.000000200000018
+    ],
+    "board_insertion_overlaps_mm3": {
+      "0": 0.0,
+      "0.25": 0.0,
+      "0.5": 0.0,
+      "1": 0.0,
+      "2": 0.0,
+      "4": 0.0,
+      "8": 0.0,
+      "16": 0.0
+    },
+    "actual_physical_fit_verified": false
+  },
+  "preferred_key_width_mm": 3.35,
+  "preferred_socket_bore_mm": 4.35,
+  "reprint_only": "exports_v2_1/01_rear_TP20_clearance.stl"
+}

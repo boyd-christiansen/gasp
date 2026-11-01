@@ -42,12 +42,30 @@ def main():
                 health = api('health')
                 assert not health['transcription_enabled'] and not health['research_predictions_enabled']
                 assert health['data_root'] == str((root/'data').resolve())
+                for asset in ['studio.js','timeline.js','journey.css','logo-particles.js','brand/face-open.png','brand/face-partial.png','brand/face-closed.png']:
+                    req = Request(f'http://127.0.0.1:{port}/static/{asset}',
+                                  headers={'Authorization':'Bearer '+token})
+                    with urlopen(req,timeout=10) as response:
+                        assert response.status == 200 and response.read(), asset
+                assert (app/'Contents/Resources/Gasp.icns').stat().st_size > 0
+                definition = {'name':'Offline saved plan','deck_id':'custom-words',
+                              'script_text':'hello world\nnext note','mode':'voiced','repetitions':1}
+                saved_plan = api('plans','POST',definition)
+                assert saved_plan in api('plans')
+                assert len(api('plans/preview','POST',definition)['steps']) == 2
+                assert len(api('collections/calibration')['plan']['steps']) == 12
+                assert len(api('collections/first-speech')['plan']['steps']) == 220
+                assert not api('journey')['progress']['complete']
+                assert api('preferences')['setup']['subject'] == 'Boyd'
+                assert not api('blocks')
                 api('connect','POST',{'source':'simulator'})
                 time.sleep(.2)
+                scene = api('scenes','POST',{'name':'Packaged app fixture','subject':'synthetic-fixture'})
                 visits = []
                 for visit in range(2):
                     session = api('sessions','POST',{'name':'APP BUNDLE SMOKE FIXTURE', 'subject':'synthetic-fixture',
-                        'collection':{'deck_id':'commands-v1','mode':'silent','visit_role':'train' if visit == 0 else 'test','repetitions':2}})
+                        'collection':{'scene_id':scene['id'],'deck_id':'commands-v1','mode':'silent','visit_role':'train' if visit == 0 else 'test','repetitions':2}})
+                    assert session['collection']['scene_snapshot'] == scene
                     visits.append(session['id'])
                     steps = session['collection']['plan']['steps']
                     chosen = {s['prompt_id'] for s in steps if s['articulation']=='silent'}
@@ -75,8 +93,19 @@ def main():
                 assert result['status']=='complete',result
                 report = result['report']
                 assert report['synthetic'] and report['train_examples']==4 and report['test_examples']==4
+                api(f'sessions/{visits[0]}/discard','POST')
+                assert len(api('blocks')) == 1 and len(api('recordings')) == 4
+                assert api('discarded-collections')[0]['id'] == visits[0]
+                assert any(m['id'] == report['id'] for m in api('models'))
+                api(f'sessions/{visits[0]}/restore','POST')
+                assert len(api('blocks')) == 2 and len(api('recordings')) == 8
+                assert not api('discarded-collections')
+                api(f'sessions/{visits[0]}','DELETE',{'confirm':True})
+                assert not (root/'data/sessions'/visits[0]).exists()
+                assert len(api('blocks')) == 1 and len(api('recordings')) == 4
+                assert any(m['id'] == report['id'] for m in api('models'))
                 api('disconnect','POST')
-                print('Standalone bundle: launch, scripts, capture, human review, reserved holdout and CPU training passed (synthetic only)')
+                print('Standalone bundle: launch, scripts, capture, human review, reserved holdout, CPU training, plan authoring and permanent deletion passed (synthetic only)')
             finally:
                 if process.poll() is None:
                     process.send_signal(signal.SIGINT)

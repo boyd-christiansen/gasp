@@ -1,0 +1,53 @@
+{
+  "key_width_mm": 3.35,
+  "key_quantity": 2,
+  "socket_bore_mm": 4.35,
+  "socket_quantity": 1,
+  "basis": "User selected largest key and tightest stand sleeve in physical coupon tests.",
+  "full_assembly_physically_verified": false,
+  "sliding_hook_geometry_changed": false,
+  "files": {
+    "01_rear_flat.stl": {
+      "source": "exports_v2_1/01_rear_TP20_clearance.stl",
+      "quantity": 1,
+      "sha256": "ad83cc73acc2f7d46fac39a9ad6628391b1b33dcb31551e1b51dd1f4ad79f9d5"
+    },
+    "02_sliding_front.stl": {
+      "source": "exports_v2/02_sliding_front.stl",
+      "quantity": 1,
+      "sha256": "5f5bd08178cfed20cc18e940644457e61732847d524b5d8d35253961c393108d"
+    },
+    "03_aperture_shroud.stl": {
+      "source": "exports_v2/03_aperture_shroud.stl",
+      "quantity": 1,
+      "sha256": "fbb96e0947bd8366534a63b381cbecf37d6f7666809e59273efeb462560b86a6"
+    },
+    "04a_locking_key_3p35.stl": {
+      "source": "exports_v2/key_3p35_snug_trial.stl",
+      "quantity": 1,
+      "sha256": "545d8dedbea6767d27c5786047f2b704b3a68a22643ec7334ac4eb743bbb6908"
+    },
+    "04b_locking_key_3p35.stl": {
+      "source": "exports_v2/key_3p35_snug_trial.stl",
+      "quantity": 1,
+      "sha256": "545d8dedbea6767d27c5786047f2b704b3a68a22643ec7334ac4eb743bbb6908"
+    },
+    "05_detachable_heel.stl": {
+      "source": "exports_v2/05_detachable_heel.stl",
+      "quantity": 1,
+      "sha256": "a32d798154f48d431886af5060976b0dc43229a135484f8a630de204dcff7457"
+    },
+    "06_heel_keeper.stl": {
+      "source": "exports_v2/06_heel_keeper.stl",
+      "quantity": 1,
+      "sha256": "27e24bdddae4aa6fd1ceebd515876f3ea30bb527f1327b2555a8d6827f87fcff"
+    },
+    "07_stand_socket_4p35.stl": {
+      "source": "exports_v2/socket_4p35_snug_trial.stl",
+      "quantity": 1,
+      "sha256": "c7164963444e29882c518d371686a464e86870e74f0583843ed0cb7b1c12d3bb"
+    }
+  },
+  "revision": "v2.1 TP20 rear clearance",
+  "reprint_only": "01_rear_flat.stl"
+}

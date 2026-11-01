@@ -1,0 +1,46 @@
+{
+  "revision": "v2.2",
+  "date": "2026-11-01",
+  "cadgen": "0.8.4",
+  "units": "mm",
+  "native_fit_status": "PASS",
+  "export_mesh_status": "PASS",
+  "physical_fit_verified": false,
+  "small_plate_quantity": 6,
+  "case_plate_quantity": 2,
+  "reuse": [
+    "existing aperture shroud",
+    "existing desktop stand",
+    "existing T-shaped keeper"
+  ],
+  "replace": [
+    "rear",
+    "front",
+    "two keys",
+    "mounting block",
+    "separate sleeve (retired; socket now integral)"
+  ],
+  "add": [
+    "flat preload clip"
+  ],
+  "assumptions": {
+    "molded_strain_relief_diameter_mm": 9,
+    "molded_strain_relief_length_mm": 12,
+    "material": "standard PLA"
+  },
+  "source_sha256": {
+    "src/enclosure.py": "7deaa4e9a07b1677d9eed62e72b5ac95b1fbda8c50ed5f66caabbbf784dc7ccc",
+    "src/enclosure_v1_2.py": "4eec274a5cbf29c3f91a6f795c08420bad6720ffd0f32ea84ccf252b987c0703",
+    "src/enclosure_v1_3.py": "cdd2cffafbc4228dd96f823678d33e76823ead622d88a5243077106bcf39837b",
+    "src/enclosure_v2.py": "73f7a644ad3fad3b01c32c0ab8654c7754ce3fb9aede096d2818efea36ddeca0",
+    "src/desktop_dock.py": "6e001c947e4e3d2ddcca0ec4d73ef0fb76c50dec1a475bd54095084d246ae9f6",
+    "src/enclosure_v2_2.py": "2110ea1640e170cb41ab6cf721a27a29e87c26be0278c64c262762f16126d4e0",
+    "src/exports_v2_2.py": "6a161aae25b444c0a90c30fe17388d4ef366676d38db782fe421184f22b265ab"
+  },
+  "intentional_fits": {
+    "socket_bore_mm": 4.35,
+    "stand_pin_diameter_mm": 4.5,
+    "clip_preload_mm": 0.1
+  },
+  "stand_retention": "gravity and friction; no positive lift latch"
+}

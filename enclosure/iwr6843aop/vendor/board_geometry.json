@@ -554,6 +554,32 @@
       "ymax": -53.206278,
       "height": 2.899999,
       "source_model": "Molex_1050170001.stp"
+    },
+    {
+      "name": "TP20",
+      "layer": "BOTTOM",
+      "xmin": -8.642236,
+      "xmax": -5.642236,
+      "ymin": 4.185857,
+      "ymax": 7.185857,
+      "height": 9.2,
+      "source_model": "",
+      "source_part": "Keystone 4953; TP20 on GND",
+      "source_drawing": "https://www.keyelco.com/product-pdf.cfm?p=1307",
+      "geometry_note": "Conservative clearance envelope; not exact terminal geometry."
+    },
+    {
+      "name": "TP20_tail",
+      "layer": "TOP",
+      "xmin": -8.642236,
+      "xmax": -5.642236,
+      "ymin": 4.185857,
+      "ymax": 7.185857,
+      "height": 2.6,
+      "source_model": "",
+      "source_part": "Keystone 4953; TP20 on GND",
+      "source_drawing": "https://www.keyelco.com/product-pdf.cfm?p=1307",
+      "geometry_note": "Conservative clearance envelope; not exact terminal geometry."
     }
   ],
   "note": "Unpanelled full board; fabrication rails excluded. Component bodies are bounding envelopes, not a populated vendor STEP."

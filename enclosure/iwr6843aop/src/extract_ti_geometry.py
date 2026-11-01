@@ -56,6 +56,21 @@ def main():
                        "xmin": min(p[0] for p in ps), "xmax": max(p[0] for p in ps),
                        "ymin": min(p[1] for p in ps), "ymax": max(p[1] for p in ps),
                        "height": round(h, 6), "source_model": d.get("MODEL.NAME", "")})
+    # TP20 lacks a height-bearing component body in the Altium extraction.
+    # Its position and part number come from TI; the Keystone 4953 drawing
+    # gives a roughly 9 mm exposed loop and 4 mm insertion post. Use a
+    # conservative 3 mm square, independent of terminal clocking, and 9.2 mm
+    # height; the opposite-face tail is bounded separately at 2.6 mm.
+    tp20 = next(c for c in components.values() if c.get("SOURCEDESIGNATOR") == "TP20")
+    tx, ty = altium_xy(tp20["X"], tp20["Y"])
+    for name, layer, height in (("TP20", "BOTTOM", 9.2), ("TP20_tail", "TOP", 2.6)):
+        bodies.append({"name": name, "layer": layer,
+                       "xmin": tx - 1.5, "xmax": tx + 1.5,
+                       "ymin": ty - 1.5, "ymax": ty + 1.5,
+                       "height": height, "source_model": "",
+                       "source_part": "Keystone 4953; TP20 on GND",
+                       "source_drawing": "https://www.keyelco.com/product-pdf.cfm?p=1307",
+                       "geometry_note": "Conservative clearance envelope; not exact terminal geometry."})
     data = {"source": "TI SPRR418A / PROC091G (2021-09-02)",
             "url": "https://www.ti.com/lit/zip/sprr418", "pcb_thickness": 1.6256,
             "outline": [xy(*p) for p in points[:-1]], "mounting_holes": holes,

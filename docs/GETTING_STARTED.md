@@ -31,27 +31,29 @@ Open **[the training workspace](http://127.0.0.1:8765/training)**, or double-cli
 
 The root page is an older research workbench. A source launch with `serve --research` explicitly enables its experimental phrase-classifier prediction tools; it does not enable transcription. The installed app keeps prediction disabled.
 
-## Your first training visit
+## Your first collection
 
 1. In **Settings**, connect the **Simulator**. When using a physical board, follow [hardware bring-up](HARDWARE.md) first.
-2. Create a **Personal calibration** visit. Save your participant name, distance, posture, and room notes. Paired collection records each speech prompt aloud and then silently as separate takes. Rest and movement checks have their own labels.
-3. Optionally enable reference audio. The installed app asks for microphone access only when you enable it. Audio stays local and is never an input to the radar classifier. Optional on-device speech assistance can suggest annotation times.
-4. Hold Space or the on-screen recording button for a phrase; release to finish. In the installed app’s **Settings**, you can enable a **double tap of Right Option** after granting Input Monitoring. Tap once to finish or press Escape to cancel. Buttons work without that permission.
-5. **Wait for the readiness sound and Recording indicator**, then perform the prompt. DCA capture arms before it is ready. Finish after the utterance, within the take limit.
-6. Click a saved take in the Capture library, inspect the trace and loss figures, listen to reference audio if present, and confirm what you actually performed. Preserve repetitions and fillers. Use **Use prompt** only when you followed it exactly.
-7. Choose **Verify & keep**, or reject the take and try again. New takes are excluded from training until approved. Scripts and visit progress survive restarts.
+2. Open **Personal calibration → Start session**. Confirm your saved person, placement and face-to-radar distance, then choose **Enter recorder**. Edit the usual setup in Settings.
+3. Enable reference audio for aloud hardware captures. Audio stays local and is never an input to the radar classifier. Gasp warms the microphone while the recorder is open; check the input meter and use macOS Standard microphone mode for syllable exercises.
+4. For rest or movement, **press Space once**. A three-second countdown precedes the required recording duration, and capture stops automatically. These are action references with no spoken transcript.
+5. For speech, **hold Space**, wait for the readiness cue, speak, then release. DCA takes must arm before recording. Quality warnings appear immediately after a take so you can retry it before moving on.
+6. Open a saved take in the recording sidebar. Listen, inspect the signals, and confirm the words actually spoken. Automatic timing suggestions are drafts; drag word edges or select a word and drag across the audio waveform to adjust them. Whole-utterance text can be verified without word timing.
+7. Choose **Verify & keep**, or reject the take and try again. New takes are excluded from training until approved. **Pause session** saves your place; the collection's **⋯ → Start a new session…** starts from the beginning without deleting earlier recordings.
+
+The optional double-tap recording shortcut is configured in Settings and requires Input Monitoring. The on-screen controls and Space work without that permission.
 
 Calibration includes stillness, movement, syllables, and vowels. It does not automatically calibrate a speech decoder or establish phonetic separability.
 
 ## Read longer text
 
-Choose **New capture → Reader**, paste or import plain text, and save the capture conditions. Start a passage, read naturally with paced highlighting, and finish it. Each passage is saved separately and can be reviewed on the shared radar/audio/text timeline. Continue the next passage or resume the script later. Optional voice following requires reference audio and an available on-device speech model. See [Reader and timeline controls](MAC_APP.md#reader-longer-text-and-books).
+After the guided baseline is complete, choose **New type → Read a book**, give the collection a name, and paste or import plain text. Start a passage, read naturally with paced highlighting, and finish it. Each passage is saved separately and can be reviewed on the shared radar/audio/text timeline. Continue the next passage or resume later. Optional voice following requires reference audio and an available on-device speech model. See [Reader and timeline controls](MAC_APP.md#reader-longer-text-and-books).
 
-## First phrase experiment
+## Build your baseline
 
-Move to **First phrase experiment** across separate visits. Reserve validation and final test visits. In **Train baseline**, use at least two approved examples of every label on each side of a whole-visit holdout, with matching participant, source, profile, and speech mode. Calibration references are not phrase-evaluation visits.
+The overview guides you through **Personal calibration → First speech → Return & repeat → Independent check**. This initial protocol calls for 472 reviewed takes across at least three sittings; it is an engineering starting point, not a demonstrated minimum for full dictation. In **Training**, keep development and final-test sessions separate from fitting, with matching participant, source, profile and speech mode. The current trainer is a phrase classifier; sequence dictation training is not yet implemented.
 
-See [collection and review](MAC_APP.md#collection-plan), [the data/training reference](DATA_AND_TRAINING.md), and [the experiment plan](EXPERIMENTS.md) before collecting a larger dataset.
+See [collection and review](COLLECTIONS.md), [the data/training reference](DATA_AND_TRAINING.md), and [the protocol rationale](design/COLLECTION_JOURNEY.md) before collecting a larger dataset.
 
 ## Connect the hardware
 

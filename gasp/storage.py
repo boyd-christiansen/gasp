@@ -7,6 +7,7 @@ import re
 import time
 import uuid
 import math
+import shutil
 import numpy as np
 
 ID = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
@@ -29,8 +30,43 @@ class Store:
     def __init__(self, root):
         self.lock = threading.RLock()
         self.root = Path(root).expanduser().resolve()
-        for folder in ("sessions", "models", "jobs"):
+        for folder in ("sessions", "models", "jobs", "scenes", "discarded", "plans"):
             (self.root / folder).mkdir(parents=True, exist_ok=True)
+
+    def create_scene(self, setup):
+        # A scene describes placement. Sessions retain their own immutable snapshot.
+        scene = dict(setup, id=uuid.uuid4().hex, created_ns=time.time_ns())
+        atomic_json(self.root / "scenes" / (scene["id"] + ".json"), scene)
+        return scene
+
+    def scene(self, scene_id):
+        return json.loads((self.root / "scenes" / (checked_id(scene_id) + ".json")).read_text())
+
+    def save_plan(self, definition):
+        plan = dict(definition, id=uuid.uuid4().hex, created_ns=time.time_ns())
+        atomic_json(self.root / "plans" / (plan["id"] + ".json"), plan)
+        return plan
+
+    def plans(self):
+        return sorted((json.loads(f.read_text()) for f in (self.root / "plans").glob("*.json")),
+                      key=lambda p: p["created_ns"], reverse=True)
+
+    def delete_session(self, sid):
+        with self.lock:
+            self.session(sid, include_discarded=True)
+            paths = [self.session_dir(sid), self.root / "raw" / checked_id(sid)]
+            # Never follow a collection-directory symlink outside the dataset.
+            for path in paths:
+                if path.is_symlink() or path.resolve() != path:
+                    raise ValueError("Collection storage contains a redirected directory")
+            for path in reversed(paths):
+                if path.exists():
+                    shutil.rmtree(path)
+            self.discard_marker(sid).unlink(missing_ok=True)
+
+    def scenes(self):
+        return sorted((json.loads(f.read_text()) for f in (self.root / "scenes").glob("*.json")),
+                      key=lambda s: s["created_ns"], reverse=True)
 
     def session_dir(self, sid):
         return self.root / "sessions" / checked_id(sid)
@@ -49,17 +85,49 @@ class Store:
         (path / "trials").mkdir()
         return manifest
 
-    def session(self, sid):
+    def discard_marker(self, sid):
+        return self.root / "discarded" / (checked_id(sid) + ".json")
+
+    def set_discarded(self, sid, discarded):
+        # Keep original manifests, raw ADC files and annotation history in place.
+        # A separate tombstone makes discard/restore atomic and lossless.
+        with self.lock:
+            self.session(sid, include_discarded=True)
+            marker = self.discard_marker(sid)
+            if discarded:
+                if not marker.exists():
+                    atomic_json(marker, {"session_id": sid, "discarded_ns": time.time_ns()})
+            else:
+                marker.unlink(missing_ok=True)
+
+    def session(self, sid, include_discarded=False):
+        if not include_discarded and self.discard_marker(sid).exists():
+            raise ValueError("This collection is discarded. Restore it before using it.")
         return json.loads((self.session_dir(sid) / "session.json").read_text())
 
-    def sessions(self):
+    def sessions(self, discarded=False):
+        with self.lock:
+            return self._session_summaries(discarded)
+
+    def _session_summaries(self, discarded):
         result = []
         for f in sorted((self.root / "sessions").glob("*/session.json"), reverse=True):
             item = json.loads(f.read_text())
+            marker = self.discard_marker(item["id"])
+            if marker.exists() != discarded:
+                continue
+            if discarded:
+                item["discarded_ns"] = json.loads(marker.read_text())["discarded_ns"]
             trials = self.trials(item["id"])
             item["trial_count"] = len(trials)
             item["accepted_count"] = sum(t.get("accepted", True) for t in trials)
             item["pending_count"] = sum(t.get("review_status") == "pending" for t in trials)
+            steps = item.get("collection", {}).get("plan", {}).get("steps", [])
+            captured = {t.get("plan_step_id") for t in trials if t.get("review_status") != "rejected"}
+            verified = {t.get("plan_step_id") for t in trials if t.get("review_status") == "verified"}
+            item["verified_steps"] = sum(s["step_id"] in verified for s in steps)
+            item["step_count"] = len(steps)
+            item["completed_steps"] = sum(s["step_id"] in captured for s in steps)
             result.append(item)
         return sorted(result, key=lambda s: s["created_ns"], reverse=True)
 
@@ -109,6 +177,11 @@ class Store:
                     meta[key] = updates[key]
             if "confirmed_text" in updates and "words" not in updates and updates["confirmed_text"] != json.loads(path.read_text()).get("confirmed_text"):
                 meta["words"] = []
+            control = meta.get("articulation") in {"rest", "negative"}
+            if control:
+                meta.update(sample_kind="control", words=[], confirmed_text="",
+                            transcript_source="not_applicable")
+                updates = {k:v for k,v in updates.items() if k not in {"words", "confirmed_text"}}
             if "words" in updates:
                 previous_end = 0
                 for word in updates["words"]:
@@ -120,12 +193,13 @@ class Store:
                     if a is None or b is None or not all(math.isfinite(x) for x in (a,b)) or not 0 <= a < b <= meta["duration_s"]+.001 or a < previous_end:
                         raise ValueError("Word intervals must be ordered, non-overlapping and inside the recording")
                     previous_end = b
-                if " ".join(w["text"] for w in updates["words"]).split() != (meta.get("confirmed_text") or "").split():
+                from .audio_review import speech_tokens
+                if speech_tokens(" ".join(w["text"] for w in updates["words"])) != speech_tokens(meta.get("confirmed_text") or ""):
                     raise ValueError("Word annotations must match the confirmed transcript")
             if meta.get("collection_protocol"):
                 if "label" in updates:
                     raise ValueError("Review the confirmed transcript; the original prompt is immutable")
-                if updates.get("accepted"):
+                if updates.get("accepted") and not control:
                     if not (meta.get("confirmed_text") or "").strip():
                         raise ValueError("Confirm the actual text or movement label before accepting this take")
                     meta.update(label=meta["confirmed_text"].strip(), transcript_source="human_confirmed")
@@ -156,7 +230,12 @@ class Store:
             target_text=step["target_text"], pair_id=step["pair_id"], confirmed_text=None,
             asr_raw_text=None, output_text=None, transcript_source="unverified_prompt",
             review_status="pending", accepted=False, calibration_id=collection.get("calibration_id"),
-            capture_conditions={k: collection.get(k) for k in ("distance_cm", "position_notes", "location", "enclosure", "mount", "yaw_deg", "pitch_deg", "roll_deg")},
+            collection_type_id=collection.get("type_id"), collection_version=collection.get("definition_version"),
+            cohort_id=collection.get("cohort_id"), acquisition_id=collection.get("acquisition_id"),
+            training_task=step.get("training_task"),
+            sample_kind="control" if step["articulation"] in {"rest", "negative"} else "speech",
+            required_duration_s=step["duration_s"] if step["articulation"] in {"rest", "negative"} else None,
+            capture_conditions={k: step.get(k, collection.get(k)) for k in ("scene_id", "scene_name", "distance_cm", "position_notes", "location", "enclosure", "mount", "yaw_deg", "pitch_deg", "roll_deg")},
             script_sha256=collection["plan"].get("script_sha256"), task=collection["plan"].get("task", "phrases"))
 
     def add_trial_fields(self, sid, tid, fields):

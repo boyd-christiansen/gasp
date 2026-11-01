@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gasp · Collection journey preview</title>
+<link rel="stylesheet" href="collection-journey.css">
+</head>
+<body>
+<div class="preview"><div><strong>Design preview</strong><span> · Simulated data</span><span class="preview-detail">. No hardware or recordings are accessed.</span></div><nav aria-label="Preview states"><button data-preview="new" aria-pressed="true">First launch</button><button data-preview="progress" aria-pressed="false">In progress</button><button data-preview="complete" aria-pressed="false">Baseline complete</button></nav><a href="COLLECTION_JOURNEY.md" class="preview-detail">Design notes ↗</a></div>
+<div class="shell"><aside class="rail"><div class="brand"><img src="../../gasp/static/brand/face-open.png" alt=""><span>Gasp</span></div><nav><div class="nav-label">Radar data</div><button class="nav-item current" data-action="home"><span class="icon-slot" data-icon="capture"></span><span>Capture</span></button><button class="nav-item" data-action="training"><span class="icon-slot" data-icon="chart"></span><span>Training</span></button><div class="nav-label" style="margin-top:27px">Voice</div><button class="nav-item" data-action="dictation"><span class="icon-slot" data-icon="mic"></span><span>Dictation</span></button></nav><div class="rail-bottom"><button class="nav-item" data-action="settings"><span class="icon-slot" data-icon="settings"></span><span>Settings</span></button><div class="person flex"><div class="avatar">B</div><span class="name">Boyd</span></div></div></aside>
+<main id="main"><header class="topbar"><div class="flex"><button class="icon-button" id="libraryToggle" aria-label="Show recording sidebar" aria-expanded="false"></button><div id="breadcrumbs" class="breadcrumbs"></div></div><div class="radar"><div class="split-control"><button id="radarStatus" aria-label="Radar settings"><span class="dot red"></span><span>Radar disconnected</span></button><button class="dropdown" id="radarMenuToggle" aria-label="Radar actions" aria-expanded="false"></button></div><div class="menu hidden" id="radarMenu"><button data-action="device">Radar settings…</button><button data-action="connect">Connect demo radar</button></div></div></header>
+<div id="workspace" class="workspace"><aside class="library" id="library" inert><div class="library-inner"><h3>Recordings</h3><input id="search" class="search" placeholder="Search sessions" aria-label="Search sessions"><select id="sessionFilter" aria-label="Filter sessions"><option value="all">All sessions</option><option value="review">Needs review</option><option value="complete">Reviewed</option></select><div id="libraryList"></div></div></aside><div class="content" id="content"></div></div></main></div>
+<dialog id="modal" class="modal"></dialog>
+<script src="collection-journey.js"></script>
+</body></html>

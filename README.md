@@ -4,25 +4,27 @@
 
 <p>
   <img src="enclosure/capture_stack/renders/assembled_20.png" alt="Full capture-stack enclosure with ripple cover and adjustable tabletop stand" height="280">
-  <img src="enclosure/iwr6843aop/renders/desktop_dock_assembled.png" alt="Single-board radar enclosure in the new drop-in desktop dock" height="280">
+  <img src="enclosure/iwr6843aop/renders/v2_2_desktop.png" alt="Single-board radar enclosure v2.2 with aperture shroud and fitted desktop mount" height="280">
 </p>
 
-Two desktop prototypes: the **full capture stack** for IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM, and the **single-board enclosure with its new desktop dock**. [Explore the hardware and print files →](docs/ENCLOSURES.md)
+Two desktop prototypes: the **full capture stack** for IWR6843AOPEVM + MMWAVEICBOOST + DCA1000EVM, and the **single-board v2.2 enclosure with its fitted desktop mount**. [Explore the hardware and print files →](docs/ENCLOSURES.md)
 
 ## The app
 
 Gasp is a local Mac app for recording radar data while you read or silently mouth scripts. It guides calibration, pairs optional reference audio with radar takes, and lets you review recordings before training a personal phrase model.
 
-![Gasp app](docs/gasp-preview.png)
+![Gasp 0.6.1 timed calibration recorder, using the simulator](docs/gasp-preview.png)
+
+Guided capture, then a shared timeline for audio, words and radar. [See the review interface →](docs/COLLECTIONS.md#review-your-recordings) Screenshots use synthetic demo data.
 
 **This first version focuses on training data. Transcription and text insertion are disabled.** The enclosures are CAD prototypes, and physical radar performance and real silent-speech accuracy remain unverified.
 
-## Get started with your first training visit
+## Get started with your first collection
 
 1. **[Install or launch Gasp](docs/GETTING_STARTED.md)** and connect the **Simulator** to practice without hardware.
-2. Create a **Personal calibration** visit and choose aloud, silent, or paired collection.
-3. Record a prompt after the readiness cue. Review what you performed, then choose **Verify & keep** or retake it.
-4. Continue with **First phrase experiment** across separate visits, then train a baseline with a held-out visit.
+2. Open **Personal calibration**, start a session, confirm your setup, and enter the recorder.
+3. Follow the prompts: actions have a countdown and automatic stop; hold Space for speech. Review each take and choose **Verify & keep** or record it again.
+4. Work through **First speech → Return & repeat → Independent check**. Then add your own collections and train a phrase baseline with held-out sessions.
 
 The installed app supports a double tap of Right Option to record. Takes and reference audio stay on your Mac. The simulator checks the workflow; its results do not measure speech recognition.
 

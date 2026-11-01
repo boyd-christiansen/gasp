@@ -1,0 +1,19 @@
+{
+  "scope": "Rigid CAD only; no printed flex, friction, wear or arbitrary motion-path proof.",
+  "hook_top_z_mm": 12.4,
+  "ledge_underside_z_mm": 12.7,
+  "nominal_lift_clearance_mm": 0.29999999999999893,
+  "full_cover_lateral_motion_overlap_mm3": {
+    "-0.6": 1.4670177681092158,
+    "-0.4": 0.07548960945109413,
+    "0.4": 0.07548960974161663,
+    "0.6": 1.4670177682155099
+  },
+  "full_cover_lift_overlap_mm3": {
+    "0.2": 0.0,
+    "0.4": 3.67999999999999,
+    "1": 25.759999999999977
+  },
+  "single_coupon_lift_1mm_at_x_-2.4": 0.0,
+  "single_coupon_lift_1mm_at_x_0": 6.439999999999948
+}

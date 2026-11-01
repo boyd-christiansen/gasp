@@ -18,81 +18,145 @@ final class AudioReference {
     private var sampleRate: Double = 0
     private var channels: UInt32 = 0
     private var speechRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var ring: [(AVAudioPCMBuffer, AVAudioTime)] = []
+    private var ringFrames: UInt32 = 0
+    private var preRollSeconds: Double = 0
+    private var warmed = false
+    private var level: Float = 0
+    private var lastBuffer: Double = 0
     private(set) var stopped = true
 
-    func start(speech: SFSpeechAudioBufferRecognitionRequest? = nil) throws {
-        guard stopped, location == nil else { throw failure("Finish the previous audio reference first.") }
+    func prepare() throws {
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Settings.") }
+        if warmed && engine.isRunning { return }
+        if warmed { cool() }
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw failure("No microphone input is available.") }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("gasp-audio-\(UUID().uuidString).wav")
-        let settings: [String: Any] = [AVFormatIDKey:kAudioFormatLinearPCM, AVSampleRateKey:format.sampleRate,
-            AVNumberOfChannelsKey:format.channelCount, AVLinearPCMBitDepthKey:32,
-            AVLinearPCMIsFloatKey:true, AVLinearPCMIsNonInterleaved:false]
-        let output = try AVAudioFile(forWriting:url, settings:settings, commonFormat:.pcmFormatFloat32, interleaved:false)
-        lock.lock()
-        file = output; location = url; firstHost = nil; firstSample = nil; expectedSample = nil
-        frames = 0; discontinuities = 0; writeError = nil; sampleRate = format.sampleRate; channels = format.channelCount; speechRequest = speech
-        lock.unlock()
+        if input.isVoiceProcessingEnabled { try input.setVoiceProcessingEnabled(false) }
+        let format = input.outputFormat(forBus:0)
+        guard format.sampleRate>0, format.channelCount>0 else { throw failure("No microphone input is available.") }
+        sampleRate=format.sampleRate; channels=format.channelCount
         input.installTap(onBus:0, bufferSize:1024, format:format) { [weak self] buffer, when in
             guard let self else { return }
             self.lock.lock(); defer { self.lock.unlock() }
-            guard let f = self.file else { return }
-            if self.firstHost == nil && when.isHostTimeValid {
-                self.firstHost = UInt64(AVAudioTime.seconds(forHostTime:when.hostTime)*1e9)
+            self.lastBuffer=ProcessInfo.processInfo.systemUptime
+            if let data=buffer.floatChannelData {
+                var sum:Float=0
+                for i in 0..<Int(buffer.frameLength) { sum += data[0][i]*data[0][i] }
+                self.level=sqrt(sum/Float(max(1,buffer.frameLength)))
             }
-            if when.isSampleTimeValid {
-                if self.firstSample == nil { self.firstSample = when.sampleTime }
-                if let expected = self.expectedSample, when.sampleTime != expected { self.discontinuities += 1 }
-                self.expectedSample = when.sampleTime + Int64(buffer.frameLength)
+            if self.file != nil { self.append(buffer, when) }
+            // A short in-memory pre-roll catches speech begun with the key press.
+            // No file is created until a take starts; discard this memory on exit.
+            if let copy=AVAudioPCMBuffer(pcmFormat:buffer.format,frameCapacity:buffer.frameLength),
+               let src=buffer.floatChannelData,let dst=copy.floatChannelData {
+                copy.frameLength=buffer.frameLength
+                for c in 0..<Int(buffer.format.channelCount) {
+                    memcpy(dst[c],src[c],Int(buffer.frameLength)*MemoryLayout<Float>.size)
+                }
+                self.ring.append((copy,when));self.ringFrames += copy.frameLength
+                while self.ring.count>1 && self.ringFrames > UInt32(self.sampleRate * 0.3) {
+                    self.ringFrames -= self.ring.removeFirst().0.frameLength
+                }
             }
-            self.speechRequest?.append(buffer)
-            do { try f.write(from:buffer); self.frames += Int64(buffer.frameLength) }
-            catch { self.writeError = error.localizedDescription }
         }
-        do { try engine.start(); stopped = false }
-        catch { input.removeTap(onBus:0); file = nil; try? FileManager.default.removeItem(at:url); location = nil; throw error }
+        do { engine.prepare(); try engine.start(); warmed=true }
+        catch { input.removeTap(onBus:0); throw error }
+    }
+    private func append(_ buffer:AVAudioPCMBuffer,_ when:AVAudioTime) {
+        guard let f=file else { return }
+        if firstHost == nil && when.isHostTimeValid { firstHost=UInt64(AVAudioTime.seconds(forHostTime:when.hostTime)*1e9) }
+        if when.isSampleTimeValid {
+            if firstSample == nil { firstSample=when.sampleTime }
+            if let expected=expectedSample,when.sampleTime != expected { discontinuities += 1 }
+            expectedSample=when.sampleTime+Int64(buffer.frameLength)
+        }
+        speechRequest?.append(buffer)
+        do { try f.write(from:buffer);frames += Int64(buffer.frameLength) }
+        catch { writeError=error.localizedDescription }
+    }
+    func start(speech:SFSpeechAudioBufferRecognitionRequest?=nil) throws {
+        guard stopped,location == nil else { throw failure("Finish the previous audio reference first.") }
+        try prepare()
+        guard status()["ready"] as? Bool == true else { throw failure("Microphone is warming up. Wait for the input meter, then try again.") }
+        let url=FileManager.default.temporaryDirectory.appendingPathComponent("gasp-audio-\(UUID().uuidString).wav")
+        let settings:[String:Any]=[AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:sampleRate,
+            AVNumberOfChannelsKey:channels,AVLinearPCMBitDepthKey:32,AVLinearPCMIsFloatKey:true,AVLinearPCMIsNonInterleaved:false]
+        let output=try AVAudioFile(forWriting:url,settings:settings,commonFormat:.pcmFormatFloat32,interleaved:false)
+        lock.lock();defer { lock.unlock() }
+        file=output;location=url;firstHost=nil;firstSample=nil;expectedSample=nil
+        frames=0;discontinuities=0;writeError=nil;speechRequest=speech;stopped=false
+        preRollSeconds=Double(ringFrames)/sampleRate
+        for (buffer,time) in ring { append(buffer,time) }
     }
     func stop() {
-        guard !stopped else { return }
-        engine.stop(); engine.inputNode.removeTap(onBus:0)
-        lock.lock(); file = nil; stopped = true; let request = speechRequest; speechRequest = nil; lock.unlock()
+        lock.lock();let request=speechRequest;speechRequest=nil;file=nil;stopped=true;lock.unlock()
         request?.endAudio()
     }
-    func reference() throws -> (URL, [String:Any]) {
+    func cool() {
         stop()
-        lock.lock(); defer { lock.unlock() }
-        guard let url = location, frames > 0 else { throw failure("No microphone samples were recorded.") }
-        if let error = writeError { throw failure("Audio write failed: \(error)") }
-        let metadata: [String:Any] = ["clock":"mach_absolute_time / AVAudioTime hostTime; same host clock as Python monotonic",
-            "first_sample_host_ns":firstHost.map { $0 as Any } ?? NSNull(),
-            "first_sample_position":firstSample.map { $0 as Any } ?? NSNull(),
-            "sample_rate_hz":sampleRate, "channels":channels, "frames":frames,
-            "sample_discontinuities":discontinuities, "duration_s":Double(frames)/sampleRate,
-            "alignment":"Host-clock audio anchor. Radar transport latency and DCA command-to-frame offset are unmeasured." ]
-        return (url,metadata)
+        if warmed { engine.stop();engine.inputNode.removeTap(onBus:0);warmed=false }
+        lock.lock();ring=[];ringFrames=0;level=0;lastBuffer=0;lock.unlock()
     }
-    func discard() { stop(); if let url = location { try? FileManager.default.removeItem(at:url) }; location = nil }
+    func status() -> [String:Any] {
+        lock.lock()
+        let rms=level, recent=ProcessInfo.processInfo.systemUptime-lastBuffer < 0.6
+        lock.unlock()
+        return ["ready":warmed && engine.isRunning && recent,
+            "level":rms,"sample_rate_hz":sampleRate,"microphone_mode":mode(),
+            "device":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Mac sound input",
+            "voice_processing":engine.inputNode.isVoiceProcessingEnabled]
+    }
+    private func mode() -> String {
+        switch AVCaptureDevice.activeMicrophoneMode {
+        case .voiceIsolation:return "voice_isolation"
+        case .wideSpectrum:return "wide_spectrum"
+        default:return "standard"
+        }
+    }
+    func reference() throws -> (URL,[String:Any]) {
+        stop();lock.lock();defer { lock.unlock() }
+        guard let url=location,frames>0 else { throw failure("No microphone samples were recorded.") }
+        if let error=writeError { throw failure("Audio write failed: \(error)") }
+        return (url,["clock":"mach_absolute_time / AVAudioTime hostTime; same host clock as Python monotonic",
+            "first_sample_host_ns":firstHost.map{$0 as Any} ?? NSNull(),
+            "first_sample_position":firstSample.map{$0 as Any} ?? NSNull(),
+            "sample_rate_hz":sampleRate,"channels":channels,"frames":frames,
+            "sample_discontinuities":discontinuities,"duration_s":Double(frames)/sampleRate,
+            "microphone_mode":mode(),"voice_processing":engine.inputNode.isVoiceProcessingEnabled,
+            "device":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Mac sound input",
+            "pre_roll_s":preRollSeconds,"alignment":"Host-clock audio anchor; radar transport latency remains unmeasured."])
+    }
+    func discard() { stop();if let url=location { try? FileManager.default.removeItem(at:url) };location=nil }
 }
 func failure(_ message: String) -> NSError { NSError(domain:"Gasp",code:1,userInfo:[NSLocalizedDescriptionKey:message]) }
 
 final class OverlayState: ObservableObject {
-    @Published var title = "Ready to collect"
+    @Published var title = "Ready"
     @Published var detail = ""
     @Published var active = false
+    @Published var elapsed: Double = 0
+    @Published var limit: Double = 0
 }
 struct CaptureOverlay: View {
     @ObservedObject var state: OverlayState
     var body: some View {
-        HStack(spacing:13) {
-            Image(systemName:state.active ? "waveform" : "checkmark.circle").font(.system(size:22)).foregroundColor(state.active ? Color.white : Color.white.opacity(0.7))
-            VStack(alignment:.leading,spacing:4) {
-                Text(state.title).font(.system(size:13,weight:.medium)).foregroundColor(.white)
+        HStack(spacing:10) {
+            FaceMark(active:state.active)
+            VStack(alignment:.leading,spacing:5) {
+                HStack {
+                    Text(state.title).font(.system(size:12,weight:.medium))
+                    Spacer()
+                    if state.active && state.limit > 0 {
+                        Text(String(format:"%02d:%02d",Int(state.elapsed)/60,Int(state.elapsed)%60))
+                            .font(.system(size:12,weight:.medium,design:.monospaced))
+                    }
+                }.foregroundColor(.white)
                 Text(state.detail).font(.system(size:11)).foregroundColor(.white.opacity(0.6)).lineLimit(1)
+                if state.active && state.limit > 0 {
+                    ProgressView(value:min(state.elapsed,state.limit),total:state.limit).tint(.white).scaleEffect(y:0.6)
+                }
             }
-            Spacer(minLength:0)
-        }.padding(18).frame(width:370,height:76).background(Color(white:0.08)).cornerRadius(15)
+        }.padding(.horizontal,16).frame(width:370,height:82).background(Color(white:0.08)).cornerRadius(17)
     }
 }
 
@@ -144,7 +208,10 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
     func makeMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName:"waveform",accessibilityDescription:"Gasp")
+        if let url = Bundle.main.url(forResource:"face-open",withExtension:"png"), let image = NSImage(contentsOf:url) {
+            image.size = NSSize(width:22,height:22); image.isTemplate = true; statusItem.button?.image = image
+        }
+        statusItem.button?.toolTip = "Gasp"
         let menu = NSMenu()
         menu.addItem(withTitle:"Open Gasp",action:#selector(showWindow),keyEquivalent:"").target = self
         menu.addItem(withTitle:"Record / finish take",action:#selector(toggle),keyEquivalent:"").target = self
@@ -160,7 +227,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         editRoot.submenu = edit; appMenu.addItem(editRoot); NSApp.mainMenu = appMenu
     }
     func makeOverlay() {
-        panel = NSPanel(contentRect:NSRect(x:0,y:0,width:370,height:76),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
+        panel = NSPanel(contentRect:NSRect(x:0,y:0,width:370,height:82),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
         panel.level = .floating; panel.isOpaque = false; panel.backgroundColor = .clear
         panel.hasShadow = true; panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
@@ -207,7 +274,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             do {
                 var result: Any = ["ok":true]
                 switch action {
-                case "info": result = ["keyCode":Int(gesture.keyCode),"shortcutEnabled":eventTap != nil,"shortcutMessage":eventTap != nil ? "Shortcut enabled · radar capture" : "Input Monitoring permission required · radar capture"]
+                case "info": result = ["audioAuthorized":AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,"keyCode":Int(gesture.keyCode),"shortcutEnabled":eventTap != nil,"shortcutMessage":eventTap != nil ? "Shortcut enabled · radar capture" : "Input Monitoring permission required · radar capture"]
                 case "enableShortcut":
                     setKey(body); startMonitor(request:true)
                     result = ["enabled":eventTap != nil,"message":eventTap != nil ? "Shortcut enabled · radar capture" : "Allow Gasp in System Settings → Privacy & Security → Input Monitoring, then click Enable again."]
@@ -237,6 +304,10 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     try FileManager.default.moveItem(at:download,to:local)
                     defer { try? FileManager.default.removeItem(at:local) }
                     result = try await speech.align(url:local)
+                case "audioPrepare": try audio.prepare(); result=audio.status()
+                case "audioStatus": result=audio.status()
+                case "audioCool": audio.cool()
+                case "microphoneModes": AVCaptureDevice.showSystemUserInterface(.microphoneModes)
                 case "audioStop": audio.stop()
                 case "audioDiscard": audio.discard()
                 case "audioAttach":
@@ -256,11 +327,13 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     recording = body["active"] as? Bool ?? false
                     let title = body["status"] as? String ?? "Ready"
                     overlayState.title = title; overlayState.detail = body["detail"] as? String ?? ""; overlayState.active = recording
+                    overlayState.elapsed = body["elapsed"] as? Double ?? 0
+                    overlayState.limit = body["limit"] as? Double ?? 0
                     hideOverlay?.cancel()
                     if recording || title.hasPrefix("Saved") || title.contains("attention") {
                         if let screen = NSScreen.main { panel.setFrameOrigin(NSPoint(x:screen.visibleFrame.midX-185,y:screen.visibleFrame.minY+28)) }
                         panel.orderFrontRegardless()
-                        if !recording { let hide = DispatchWorkItem { [weak self] in self?.panel.orderOut(nil) }; hideOverlay = hide; DispatchQueue.main.asyncAfter(deadline:.now()+3,execute:hide) }
+                        if !recording { let hide = DispatchWorkItem { [weak self] in self?.panel.orderOut(nil) }; hideOverlay = hide; DispatchQueue.main.asyncAfter(deadline:.now()+1.6,execute:hide) }
                     } else { panel.orderOut(nil) }
                 default: throw failure("Unknown app action.")
                 }

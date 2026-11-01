@@ -13,6 +13,13 @@ class Replay:
         self.cache = OrderedDict()
         self.bytes = 0
 
+    def forget_session(self, sid):
+        with self.lock:
+            for key in list(self.cache):
+                if key[0] == sid:
+                    _, cost = self.cache.pop(key)
+                    self.bytes -= cost
+
     def load(self, sid, tid):
         path = self.store.trial_dir(sid, tid)
         stat = (path / "radar.npz").stat()

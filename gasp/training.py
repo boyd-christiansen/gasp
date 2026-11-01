@@ -84,6 +84,10 @@ def train(store, session_ids, test_session_ids, spec=None, articulation=None):
     rejected = []
     for session in sessions:
         for trial in store.trials(session["id"]):
+            if trial.get("training_task") == "sentence":
+                # The baseline classifier measures the repeated vocabulary. Sentence
+                # pairs are retained for a future sequence model, not made into classes.
+                continue
             if not trial.get("accepted", True):
                 continue
             if trial.get("articulation", "silent") not in {articulation, "rest", "negative"}:

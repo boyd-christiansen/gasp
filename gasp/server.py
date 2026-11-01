@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 from ipaddress import IPv4Address
 import time
@@ -22,6 +23,7 @@ from .collection import DECKS, make_plan
 from .transport import ports
 from .replay import Replay
 from . import __version__
+from .journey import register_journey
 
 STATIC = Path(__file__).parent / "static"
 
@@ -38,7 +40,21 @@ class Connect(BaseModel):
     confirm_layout: bool = False
 
 
+class SceneInput(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    subject: str = Field(default="Boyd", min_length=1, max_length=80)
+    distance_cm: float = Field(default=45, ge=10, le=200)
+    location: str = Field(default="", max_length=120)
+    enclosure: str = Field(default="", max_length=120)
+    mount: str = Field(default="", max_length=120)
+    yaw_deg: float | None = Field(default=None, ge=-180, le=180)
+    pitch_deg: float | None = Field(default=None, ge=-180, le=180)
+    roll_deg: float | None = Field(default=None, ge=-180, le=180)
+    position_notes: str = Field(default="", max_length=2000)
+
+
 class CollectionInput(BaseModel):
+    scene_id: str | None = None
     deck_id: str
     mode: str = Field(default="silent", pattern="^(silent|voiced|paired)$")
     repetitions: int = Field(default=2, ge=1, le=10)
@@ -65,6 +81,20 @@ class CollectionRecord(BaseModel):
     reader_wpm: int | None = Field(default=None, ge=50, le=300)
 
 
+class PlanInput(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    deck_id: str
+    mode: str = Field(default="voiced", pattern="^(silent|voiced|paired)$")
+    repetitions: int = Field(default=1, ge=1, le=10)
+    visit_role: str = Field(default="train", pattern="^(train|validation|test|calibration)$")
+    script_text: str | None = Field(default=None, max_length=200000)
+    words_per_minute: int = Field(default=130, ge=50, le=300)
+
+
+class DeleteCollection(BaseModel):
+    confirm: bool = False
+
+
 class CaptureEvent(BaseModel):
     name: str = Field(pattern="^(cue_shown|speech_start|speech_end|key_down|key_up|reader_marker)$")
     estimated_server_ns: int = Field(gt=0)
@@ -77,6 +107,7 @@ class SessionInput(BaseModel):
     subject: str = Field(default="Boyd", min_length=1, max_length=80)
     notes: str = Field(default="", max_length=4000)
     collection: CollectionInput | None = None
+    setup: SceneInput | None = None
 
 
 class TrialInput(BaseModel):
@@ -90,7 +121,7 @@ class WordAnnotation(BaseModel):
     text: str = Field(min_length=1, max_length=200)
     start_s: float | None = Field(default=None, ge=0)
     end_s: float | None = Field(default=None, gt=0)
-    source: str = Field(default="manual", pattern="^(manual|speech_estimate|forced_alignment|alignment_import)$")
+    source: str = Field(default="manual", pattern="^(manual|speech_estimate|acoustic_estimate|forced_alignment|alignment_import)$")
 
 
 class TrialUpdate(BaseModel):
@@ -132,6 +163,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     engine = Engine(store)
     replay = Replay(store)
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="baseline-training")
+    active_training = {}  # Job -> input IDs; guarded by engine.lock, including queued jobs.
 
     @asynccontextmanager
     async def lifespan(app):
@@ -142,6 +174,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     app = FastAPI(title="Gasp", lifespan=lifespan)
     app.state.store, app.state.engine = store, engine
     app.state.research_enabled = research_enabled
+    register_journey(app, store, engine)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -188,6 +221,37 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     @app.get("/api/decks")
     def decks():
         return DECKS
+
+    @app.get("/api/plans")
+    def saved_plans():
+        return store.plans()
+
+    def plan_from_definition(body, raw=False):
+        script = body.script_text
+        if raw and body.deck_id == "reader":
+            limit = max(10, int(body.words_per_minute * 18 / 60))
+            words = (script or "").split()
+            script = "\n\n".join(" ".join(words[i:i+limit]) for i in range(0, len(words), limit))
+        plan = make_plan(body.deck_id, body.mode, body.repetitions,
+                         script_text=script, words_per_minute=body.words_per_minute)
+        if raw and body.deck_id == "reader":
+            for step in plan["steps"]:
+                step["duration_s"] = 25
+        return plan
+
+    @app.post("/api/plans/preview")
+    def preview_plan(body: PlanInput, raw: bool = False):
+        return plan_from_definition(body, raw)
+
+    @app.post("/api/plans")
+    def save_plan(body: PlanInput):
+        if not body.name.strip():
+            raise ValueError("Give the plan a name")
+        plan = plan_from_definition(body)
+        value = body.model_dump()
+        value.update(name=body.name.strip(), repetitions=plan["repetitions"],
+                     visit_role="calibration" if plan["calibration"] else body.visit_role)
+        return store.save_plan(value)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -236,7 +300,9 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     @app.get("/api/blocks")
     def blocks():
         # Reader documents can be large. The library needs summaries, not every script word.
-        result = store.sessions()
+        return collection_summaries(store.sessions())
+
+    def collection_summaries(result):
         for session in result:
             if session.get("collection"):
                 plan = session["collection"]["plan"]
@@ -244,33 +310,114 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
                 session["collection"]["plan"] = {k:v for k,v in plan.items() if k not in {"script_text", "steps"}}
         return result
 
+    @app.get("/api/discarded-collections")
+    def discarded_collections():
+        return sorted(collection_summaries(store.sessions(discarded=True)),
+                      key=lambda s: s["discarded_ns"], reverse=True)
+
+    @app.post("/api/sessions/{sid}/discard")
+    def discard_collection(sid: str):
+        with engine.lock:
+            if engine.recording and engine.session and engine.session["id"] == sid:
+                raise ValueError("Finish the active recording before discarding this collection")
+            if any(sid in ids for ids in active_training.values()):
+                raise ValueError("Wait for training that uses this collection to finish before discarding it")
+            store.set_discarded(sid, True)
+            if engine.session and engine.session["id"] == sid:
+                engine.session = None
+            if engine.last_trial and engine.last_trial.get("session_id") == sid:
+                engine.last_trial = None
+        return {"id": sid, "discarded": True}
+
+    @app.post("/api/sessions/{sid}/restore")
+    def restore_collection(sid: str):
+        with engine.lock:
+            store.set_discarded(sid, False)
+        return {"id": sid, "discarded": False}
+
+    @app.delete("/api/sessions/{sid}")
+    def delete_collection(sid: str, body: DeleteCollection):
+        if not body.confirm:
+            raise ValueError("Confirm permanent deletion of this collection and its recordings")
+        with engine.lock:
+            if engine.recording and engine.session and engine.session["id"] == sid:
+                raise ValueError("Finish the active recording before deleting this collection")
+            if any(sid in ids for ids in active_training.values()):
+                raise ValueError("Wait for training that uses this collection to finish before deleting it")
+            store.delete_session(sid)
+            replay.forget_session(sid)
+            if engine.session and engine.session["id"] == sid:
+                engine.session = None
+            if engine.last_trial and engine.last_trial.get("session_id") == sid:
+                engine.last_trial = None
+        return {"id": sid, "deleted": True}
+
+    @app.get("/api/scenes")
+    def scenes():
+        return store.scenes()
+
+    @app.post("/api/scenes")
+    def new_scene(body: SceneInput):
+        setup = body.model_dump()
+        setup.update(name=body.name.strip(), subject=body.subject.strip())
+        if not setup["name"] or not setup["subject"]:
+            raise ValueError("Give this scene a name and a person")
+        return store.create_scene(setup)
+
     @app.post("/api/sessions")
     def new_session(body: SessionInput):
+        # Keep source/profile validation and setup creation in one acquisition transaction.
+        with engine.lock:
+            return start_collection(body)
+
+    def start_collection(body: SessionInput):
+        if body.setup:
+            if not body.collection or body.collection.scene_id:
+                raise ValueError("Choose a saved setup or supply a new setup, not both")
+            if not body.setup.name.strip() or body.setup.subject.strip() != body.subject:
+                raise ValueError("The setup and collection must name the same person")
+            if body.collection.calibration_id:
+                raise ValueError("A new setup needs its own calibration")
         collection = None
         if body.collection:
             c = body.collection
-            plan = make_plan(c.deck_id, c.mode, c.repetitions, script_text=c.script_text, words_per_minute=c.words_per_minute)
-            if engine.profile and engine.profile.lvds_adc and c.deck_id == "reader":
-                # Raw captures are bounded to 25 s. Split text to fit, rather than silently clipping it.
-                word_limit = max(10, int(c.words_per_minute * 18 / 60))
-                text_words = (c.script_text or "").split()
-                short_text = "\n\n".join(" ".join(text_words[i:i+word_limit]) for i in range(0,len(text_words),word_limit))
-                plan = make_plan(c.deck_id, c.mode, c.repetitions, script_text=short_text, words_per_minute=c.words_per_minute)
-                for step in plan["steps"]:
-                    step["duration_s"] = 25
+            plan = plan_from_definition(c, bool(engine.profile and engine.profile.lvds_adc))
             if plan["calibration"] and c.visit_role != "calibration":
                 raise ValueError("Calibration decks must use the calibration role")
             if c.calibration_id:
                 previous = store.session(c.calibration_id)
                 if not previous.get("collection", {}).get("plan", {}).get("calibration"):
                     raise ValueError("Choose a calibration session")
+                if c.scene_id and previous["collection"].get("scene_id") != c.scene_id:
+                    raise ValueError("Use a calibration recorded in this setup")
                 if not engine.source or (previous["subject"], previous["source"], previous["profile"]["sha256"]) != (
                     body.subject, getattr(engine.source, "kind", "simulator" if engine.source.synthetic else "serial"), engine.profile.sha256):
                     raise ValueError("Calibration participant, source and profile must match this session")
                 if not any(t.get("accepted") for t in store.trials(c.calibration_id)):
                     raise ValueError("Review calibration takes before linking this reference")
             collection = dict(c.model_dump(), plan=plan)
-        return engine.create_session(body.name, body.subject, body.notes, collection)
+            if c.scene_id:
+                scene = store.scene(c.scene_id)
+                if scene["subject"] != body.subject:
+                    raise ValueError("This setup belongs to a different person. Choose a different setup for them.")
+                collection.update({k: v for k, v in scene.items() if k not in {"id", "created_ns", "name", "subject"}})
+                collection.update(scene_name=scene["name"], scene_snapshot=scene)
+        created_scene = None
+        if body.setup:
+            if engine.recording or not engine.source or engine.status != "connected":
+                raise ValueError("Connect the radar and finish the current take before starting")
+            setup = body.setup.model_dump()
+            setup.update(name=body.setup.name.strip(), subject=body.setup.subject.strip())
+            created_scene = store.create_scene(setup)
+            collection.update({k: v for k, v in created_scene.items() if k not in {"id", "created_ns", "name", "subject"}})
+            collection.update(scene_id=created_scene["id"], scene_name=created_scene["name"], scene_snapshot=created_scene)
+        try:
+            return engine.create_session(body.name, body.subject, body.notes, collection)
+        except Exception:
+            # A failed start must not leave a saved setup with no collection.
+            if created_scene:
+                (store.root / "scenes" / (created_scene["id"] + ".json")).unlink(missing_ok=True)
+            raise
 
     @app.get("/api/sessions/{sid}")
     def get_session(sid: str):
@@ -278,13 +425,14 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.post("/api/sessions/{sid}/resume")
     def resume_session(sid: str):
-        session = store.session(sid)
         with engine.lock:
+            session = store.session(sid)
             if engine.recording or not engine.source or engine.status != "connected":
                 raise ValueError("Connect the matching source and finish the current take first")
             kind = getattr(engine.source, "kind", "simulator" if engine.source.synthetic else "serial")
             if (session["source"], session["profile"]["sha256"]) != (kind, engine.profile.sha256):
-                raise ValueError("Connect the same source and profile to resume this visit")
+                profile_label = next((p["name"] for p in profiles() if p["sha256"] == session["profile"]["sha256"]), "custom " + session["profile"]["sha256"][:8])
+                raise ValueError(f"This collection used {session['source']} with profile {profile_label}. Choose those in Radar settings to resume, or start another collection with the current setup.")
             engine.session = session
             engine.last_trial = None
         return session
@@ -295,9 +443,13 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
             if not engine.session:
                 raise ValueError("Create a collection session first")
             step, extra = store.collection_record(engine.session["id"], body.step_id)
+            if engine.session["collection"]["plan"].get("free_capture") and not body.reference_expected:
+                raise ValueError("Enable the reference microphone for free capture")
+            if engine.session["collection"].get("type_id") and not engine.session["synthetic"] and step["articulation"] == "voiced" and not body.reference_expected:
+                raise ValueError("Enable the reference microphone in Settings for this aloud reference")
             extra["reference_expected"] = body.reference_expected
             extra.update(capture_method=body.capture_method, reader_follow=body.reader_follow, reader_wpm=body.reader_wpm)
-            return engine.record(step["target_text"], body.duration_s or step["duration_s"], step["articulation"], "", extra)
+            return engine.record(step["target_text"] or "[untranscribed speech]", body.duration_s or step["duration_s"], step["articulation"], "", extra)
 
     @app.get("/api/sessions/{sid}/trials")
     def trials(sid: str):
@@ -342,7 +494,53 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.patch("/api/sessions/{sid}/trials/{tid}")
     def update_trial(sid: str, tid: str, body: TrialUpdate):
+        session = store.session(sid)
+        collection = session.get("collection", {})
+        if body.accepted and collection.get("definition", {}).get("template") == "baseline":
+            take = json.loads((store.trial_dir(sid, tid) / "trial.json").read_text())
+            step = next(s for s in collection["plan"]["steps"] if s["step_id"] == take["plan_step_id"])
+            if not session["synthetic"] and step["articulation"] == "voiced" and not take.get("media"):
+                raise ValueError("This aloud reference has no audio. Reject it and record again with the microphone enabled.")
+            if step["articulation"] in {"rest", "negative"} and take.get("capture_duration_s", take["duration_s"]) < .8 * step["duration_s"]:
+                raise ValueError("This movement reference is too short. Reject it and record the full prompt again.")
+            normalize = lambda text: re.sub(r"[^\w]+", " ", text.casefold()).strip()
+            if step["articulation"] not in {"rest", "negative"} and normalize(body.confirmed_text or take.get("confirmed_text") or "") != normalize(step["target_text"]):
+                raise ValueError("This baseline take needs the prompted text. Save a draft or reject the take, then record it again.")
+        if body.accepted and collection.get("plan", {}).get("free_capture"):
+            take = json.loads((store.trial_dir(sid, tid) / "trial.json").read_text())
+            if not take.get("media") or (body.confirmed_text or take.get("confirmed_text")) in {None, "", "[untranscribed speech]", "Speak in your own words."}:
+                raise ValueError("Free capture needs reference audio and a reviewed transcript")
         return store.update_trial(sid, tid, body.model_dump(exclude_none=True))
+
+    @app.get("/api/sessions/{sid}/trials/{tid}/quality")
+    def take_quality(sid: str, tid: str):
+        from .audio_review import inspect_take
+        return inspect_take(store, sid, tid)
+
+    @app.post("/api/sessions/{sid}/trials/{tid}/suggest-timing")
+    def suggest_timing(sid: str, tid: str, body: dict):
+        from .audio_review import analyze_audio, acoustic_words, propose_words, is_control
+        path = store.trial_dir(sid, tid)
+        take = json.loads((path/"trial.json").read_text())
+        if is_control(take) or take.get("articulation") == "silent":
+            return {"words":[], "message":"This take does not use audio word alignment."}
+        text = body.get("text") or take.get("confirmed_text") or take.get("target_text") or ""
+        if not isinstance(text, str) or len(text) > 20000:
+            raise ValueError("Invalid transcript")
+        offset = float(body.get("audio_offset_s", 0))
+        if not np.isfinite(offset) or abs(offset)>600:
+            raise ValueError("Invalid audio offset")
+        recognized = body.get("recognized", [])
+        if not isinstance(recognized,list) or len(recognized)>3000 or any(not isinstance(w,dict) for w in recognized):
+            raise ValueError("Invalid recognition result")
+        words = propose_words(text, recognized, offset, take['duration_s'])
+        message = "Matched words have draft timing. Unmatched words remain unplaced."
+        if '·' in take.get('prompt_text','') and take.get('media',{}).get('file','').endswith('.wav'):
+            acoustic = acoustic_words(text, analyze_audio(path/take['media']['file']), offset, take['duration_s'])
+            if acoustic:
+                words = acoustic
+                message = "Syllable timing estimated from sound bursts. Listen and adjust the draft boundaries."
+        return {"words":words,"message":message,"placed":sum(w.get('start_s') is not None for w in words)}
 
     @app.get("/api/sessions/{sid}/trials/{tid}/signal")
     def trial_signal(sid: str, tid: str):
@@ -431,16 +629,28 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     def launch_train(body: TrainInput):
         jid = uuid.uuid4().hex
         job_path = store.root / "jobs" / (jid + ".json")
-        atomic_json(job_path, {"id": jid, "status": "queued"})
+        with engine.lock:
+            for sid in body.session_ids:
+                store.session(sid)  # Reject discarded inputs before enqueueing a job.
+            atomic_json(job_path, {"id": jid, "status": "queued"})
+            active_training[jid] = set(body.session_ids)
         def work():
-            atomic_json(job_path, {"id": jid, "status": "running"})
             try:
+                atomic_json(job_path, {"id": jid, "status": "running"})
                 report = training.train(store, body.session_ids, body.test_session_ids,
                     FeatureSpec(range_min_m=body.range_min_m, range_max_m=body.range_max_m), articulation=body.articulation)
                 atomic_json(job_path, {"id": jid, "status": "complete", "report": report})
             except Exception as exc:
                 atomic_json(job_path, {"id": jid, "status": "failed", "error": str(exc)})
-        pool.submit(work)
+            finally:
+                with engine.lock:
+                    active_training.pop(jid, None)
+        try:
+            pool.submit(work)
+        except Exception:
+            with engine.lock:
+                active_training.pop(jid, None)
+            raise
         return {"id": jid, "status": "queued"}
 
     @app.get("/api/jobs/{jid}")

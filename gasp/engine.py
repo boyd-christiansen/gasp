@@ -38,6 +38,7 @@ class Engine:
                 self.session = None
                 self.last_trial = None
                 self.ring.clear()
+                self.latest_points = None
                 self.error = None
                 self.frames = self.gaps = self.duplicates = 0
                 self.complex_frames = 0
@@ -114,6 +115,8 @@ class Engine:
                         raise ValueError("Frame counter moved backwards; board restarted—reconnect in a new session")
                     self.gaps += max(0, delta - 1)
                 self.last_number = frame.number
+                points = frame.points()
+                self.latest_points = points.tolist() if points is not None else None
                 if z is not None:
                     self.complex_frames += 1
                     item = {"t": stamp, "number": frame.number, "iq": z, "raw": frame.raw}
@@ -176,7 +179,11 @@ class Engine:
             result = self.record_results[rid]
             if result["status"] != "recording":
                 raise ValueError("Wait until the sensor is recording")
-            if time.monotonic_ns()-result["server_monotonic_start_ns"] < 500_000_000:
+            required = (self.recording.get("collection") or {}).get("required_duration_s")
+            elapsed = (time.monotonic_ns()-result["server_monotonic_start_ns"])/1e9
+            if required and elapsed < .8*required:
+                raise ValueError(f"This action needs {required:g} seconds. Keep recording until the countdown ends.")
+            if elapsed < .5:
                 raise ValueError("Record for at least half a second")
             self.recording["stop_requested_ns"] = time.monotonic_ns()
             self.recording["_stop"].set()
@@ -209,6 +216,7 @@ class Engine:
         if not rec.get("collection"):
             return {}
         return dict(rec["collection"], schema=2, capture_events=rec["events"],
+                    capture_duration_s=(rec.get("stop_requested_ns") or rec.get("ended_ns", time.monotonic_ns()))/1e9-rec["started_ns"]/1e9,
                     stop_requested_monotonic_ns=rec.get("stop_requested_ns"),
                     timing_note="Software/host timestamps; radar-to-audio offset must be validated on hardware")
 
@@ -219,6 +227,7 @@ class Engine:
         def started(stamp):
             with self.lock:
                 if not source.cancel.is_set():
+                    rec["started_ns"] = stamp
                     self.record_results[rid].update(status="recording", server_monotonic_start_ns=stamp)
         try:
             source.capture(output, duration, on_started=started, context={
@@ -257,6 +266,7 @@ class Engine:
         with self.lock:
             rec = self.recording
         rec["_stop"].wait(duration)
+        rec["ended_ns"] = time.monotonic_ns()
         if rec.get("collection") and not rec["_cancel"].is_set():
             with self.lock:
                 self.record_results[rid]["status"] = "processing"
@@ -308,6 +318,7 @@ class Engine:
                      "session": self.session,
                      "recording": {k: v for k, v in self.recording.items() if k != "items" and not k.startswith("_")} if self.recording else None,
                      "profile": self.profile.summary() if self.profile else None}
+            state["points"] = getattr(self, "latest_points", None) if age is not None and age < 2 else None
             if self.ring:
                 recent = list(self.ring)[-160:]
                 z = recent[-1]["iq"]
