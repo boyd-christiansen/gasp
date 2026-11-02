@@ -2,6 +2,14 @@
 
 USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
+## Collect / train / evaluate — 0.7.0, 2026-11-01
+
+The final software suite passed **73 tests**. The optional PyTorch checks include a deliberately simple two-pattern CTC overfit, checkpoint reload/resume, impossible target lengths and short-take invariance to batch padding. New integration checks cover immutable reviewed labels, split leakage, local cancellation, restart recovery, deletion dependencies, separate final evaluation, scheduled-worker package/result roundtrips and tampered candidate rejection. The allocation ID in worker tests is a test fixture, not a live Slurm job.
+
+The standalone Mac bundle passed launch, assets, simulated capture/review, local phrase fitting, the new dataset/run API, explicit final evaluation, deletion and parent-exit checks without a checkout or virtual environment. Browser QA on isolated synthetic data verified the overview, curriculum, dataset view, training launch, results, recording links and sentence-package preparation. The packaged app excludes PyTorch; only the optional training worker needs it.
+
+No real speech model was trained for this verification. The rack was unreachable from the selected work Tailscale profile; no live scheduler contract, GPU runtime, submission, throughput or remote cancellation was verified. Gasp labels exported jobs as prepared, with no claim that a rack job has been submitted. See [the training guide](TRAINING.md) for implemented capabilities and remaining integration.
+
 ## Automated checks
 
 `python -m pytest -q`: **23 passed** in 19.85 seconds after the saved-take prediction and serial-shutdown fixes. One upstream Starlette/AnyIO deprecation warning remains.

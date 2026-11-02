@@ -247,6 +247,8 @@ def register_journey(app, store, engine):
             else:
                 if not journey["complete"]:
                     raise ValueError("Finish your guided baseline in this radar profile first")
+                if recipe.get("role") in {"validation", "test"} and not body.reseated:
+                    raise ValueError("Step away and reseat before an independent evaluation sitting")
                 recipe.pop("plan")
                 plan = custom_plan(recipe, live["source"] == "dca1000")
             # Pair identity includes the acquisition cohort and role; repeat takes stay together.
@@ -258,3 +260,5 @@ def register_journey(app, store, engine):
                               reseated=body.reseated, acquisition_id=uuid.uuid4().hex,
                               scene_snapshot=setup, scene_name=setup["location"] or "Usual setup")
             return engine.create_session(recipe["name"], setup["subject"], "", collection)
+
+    return dict(progress=progress, definitions=definitions)

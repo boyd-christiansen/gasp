@@ -63,9 +63,11 @@ Views are enabled from saved capabilities; changing the view cannot recover a TL
 
 ## Training
 
-The Training tab retains the existing CPU **phrase baseline**. Choose matching reviewed phrase blocks for fitting and whole-block holdout, with at least two examples of every label on each side. Use one speech mode, participant, source and profile. Reserved validation/final-test blocks cannot be fitted; calibration references are not evaluation blocks. Reader passages are retained for future sequence models and are excluded from this classifier.
+Training shows the current person's reviewed dataset, curriculum progress, training runs and results. The phrase model runs locally on CPU. Sentence jobs use a portable worker package, with explicit export/import until the rack adapter is configured. Both recipes keep training, development and final-test data separate.
 
-Word boundaries help inspection and future segment-level experiments, but sequence CTC training can use a full passage transcript without manual word times. The current app does not yet implement a sequence trainer or open dictation. See [data and training](DATA_AND_TRAINING.md).
+Each prediction opens the original recording. Dataset snapshots preserve the transcript and trim used for the run; later review edits do not change old scores. Word boundaries are optional for whole-utterance CTC training. After the baseline, Training can create the next sentence collection directly in Capture.
+
+See [Collect, train, evaluate](TRAINING.md) for the complete workflow, worker contract and current limits. Live radar dictation remains disabled.
 
 ## Local files and timing
 

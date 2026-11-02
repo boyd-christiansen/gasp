@@ -48,6 +48,8 @@ def test_progress_requires_review_and_isolates_person_profile_and_simulator(tmp_
         assert start(c,'calibration').status_code==400
         c.post('/api/connect',json={'source':'simulator'})
         assert start(c,'first-speech').status_code==400
+        scope=dict(subject='Boyd',source='simulator',profile=c.get('/api/live').json()['profile']['sha256'])
+        assert c.post('/api/learning/assignments',json=scope).status_code==400
         assert c.post('/api/collections',json={'name':'Book','template':'reader','content':'A short chapter.'}).status_code==400
         session=reviewed_session(app,c,'calibration')
         p=progress(c);assert p['steps'][0]['complete'] and p['steps'][1]['unlocked'] and not p['complete']
@@ -76,6 +78,19 @@ def test_full_journey_reseat_immutable_definition_and_setup(tmp_path):
         assert saved['collection']['location']=='Desk' and saved['collection']['distance_cm']==45
         assert c.put('/api/collections/'+definition['id'],json={'name':'Changed'}).status_code==405
         assert c.get('/api/collections/'+definition['id']).json()['name']=='The Odyssey'
+        scope=dict(subject='Boyd',source='simulator',profile=c.get('/api/live').json()['profile']['sha256'])
+        first=c.post('/api/learning/assignments',json=scope)
+        second=c.post('/api/learning/assignments',json=scope)
+        assert first.status_code==second.status_code==200
+        assert len(first.json()['content'].splitlines())==20
+        assert not set(first.json()['content'].splitlines()) & set(second.json()['content'].splitlines())
+        evaluation=c.post('/api/learning/assignments',json={**scope,'purpose':'validation','content':'An entirely new sentence for evaluation.'})
+        assert evaluation.status_code==200,evaluation.text
+        assert start(c,evaluation.json()['id']).status_code==400
+        session=start(c,evaluation.json()['id'],reseated=True)
+        assert session.status_code==200,session.text
+        assert session.json()['collection']['visit_role']=='validation'
+        assert progress(c)['complete']
 
 
 def test_pose_distance_and_raw_passage_boundaries():

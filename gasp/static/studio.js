@@ -55,7 +55,7 @@ async function openSetup(_,resumeId=null){if(busy)return;await saveIfDirty();if(
  $('distance').value=setup.distance_cm||45;$('distance').disabled=!!setupResume;$('editSetup').disabled=!!setupResume;
  $('savedSceneDetails').innerHTML=`<strong>${esc(setup.subject)}</strong><span>${esc(setup.location||'Location not set')}</span><p>${esc([setup.enclosure,setup.mount].filter(Boolean).join(' · ')||'Add placement details in Settings')}</p>`;
  $('setupPlanSummary').textContent=setupResume?'Resume with the same person, position and radar profile.':'Confirm your usual setup, then you’re ready.';
- $('reseatField').hidden=!!setupResume||!['return-repeat','independent-check'].includes(selectedDefinition?.id);$('reseated').checked=false;$('setupError').hidden=true;showTab('capture');setStage('setup');updateEquipment();
+ $('reseatField').hidden=!!setupResume||!(['return-repeat','independent-check'].includes(selectedDefinition?.id)||['validation','test'].includes(selectedDefinition?.role));$('reseated').checked=false;$('setupError').hidden=true;showTab('capture');setStage('setup');updateEquipment();
 }
 async function advanceSetup(){if(busy||submittingSetup)return;$('setupError').hidden=true;if(setupResume){if(!compatible(setupResume))throw new Error('Connect '+settingsMessage(setupResume)+' to resume this session.');await resumeBlock(setupResume.id);return;}if(!$('distance').reportValidity())return;
  submittingSetup=true;updateEquipment();try{const setup={...preferences.setup,distance_cm:Number($('distance').value)};activeSession=await api('collections/'+selectedDefinition.id+'/sessions','POST',{setup,reseated:$('reseated').checked});trials=[];stepOverride=null;reviewCollectionId=null;$('pace').value=activeSession.collection.plan.words_per_minute||130;await refreshLibrary();setStage('record');}finally{submittingSetup=false;updateEquipment();}}
@@ -96,6 +96,7 @@ function requestDiscard(id){
  $('discardName').textContent=s.name;
  $('discardDescription').textContent=`Permanently delete this session and its ${s.trial_count} recording${s.trial_count===1?'':'s'}, including radar data, reference audio, and annotations. This cannot be undone. Existing trained models will remain.`;
  $('discardError').hidden=true;$('discardDialog').showModal();$('cancelDiscard').focus();
+ api('learning/dependencies/'+id).then(deps=>{if(discardTarget===id&&deps.length)$('discardDescription').textContent+=` This data is referenced by ${deps.length} training run${deps.length===1?'':'s'}. Their reports remain, but the deleted recordings cannot be reproduced; cached training packages are removed.`;}).catch(e=>notice(e.message,true));
 }
 act('cancelDiscard',()=>{if(!discarding)$('discardDialog').close();});
 $('discardDialog').addEventListener('cancel',e=>{if(discarding)e.preventDefault();});$('discardDialog').addEventListener('close',()=>discardTarget=null);
@@ -151,3 +152,5 @@ act('movementGuide',()=>{dialog('Movement guide','<canvas id="guideFace" height=
 $('journeyDialog').addEventListener('close',()=>cancelAnimationFrame(guideRAF));
 async function initStudio(){preferences=await api('preferences');$('referenceAudio').checked=native&&nativeAudioAuthorized&&preferences.reference_audio;fillPreferences();const connection=preferences.connection;$('source').value=state.status==='connected'?state.source:connection.source||'serial';sourceChanged();await ports();for(const id of ['profile','cliPort','dataPort','hostIp','boardIp'])if(connection[id])$(id).value=connection[id];if(state.status==='connected')$('profile').value=profiles.find(p=>p.sha256===state.profile?.sha256)?.name||'';profileChanged();journeyReady=true;await refreshJourney();setLibrary(false);setStage('welcome');renderLegacy();updateConnection();}
 init().catch(e=>notice(e.message,true));
+
+act('doneTraining',()=>showTab('train'));

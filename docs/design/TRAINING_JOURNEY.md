@@ -1,8 +1,10 @@
 # Training journey: from the first recordings to personal dictation
 
-Proposal · 1 November 2026 · **Not implemented**
+**Implementation update — 0.7.0:** Frozen datasets, the Training workspace, local phrase runs, a CTC worker, portable job/result exchange and follow-up capture assignments are implemented. Live rack submission, adaptive curriculum, uncertainty estimates and streaming dictation remain future work. See the [current training guide](../TRAINING.md).
 
-[Collection journey](COLLECTION_JOURNEY.md) · [Current training implementation](../DATA_AND_TRAINING.md)
+Original proposal · 1 November 2026 · retained as the design rationale; see the implementation update above.
+
+[Collection journey](COLLECTION_JOURNEY.md) · [Current training implementation](../TRAINING.md)
 
 ## Product decision
 

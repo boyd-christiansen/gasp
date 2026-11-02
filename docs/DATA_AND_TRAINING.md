@@ -14,7 +14,7 @@ The first supervision is **confirmed text for the whole utterance**. Original pr
 
 Audio/cue/radar alignment is software-based, with recorded uncertainty. USB timestamps describe packet arrival; DCA preserves its burst schedule and known missing frames. Device and transport delays remain unmeasured. Word intervals are optional, versioned annotations with manual, speech-estimate or imported-alignment provenance. Untimed words stay untimed. Optional local ASR estimates require review; imported forced alignment must match reviewed text. There are no fabricated phoneme timestamps. Validate offsets on hardware before using fine temporal labels. See [timing and schema details](MAC_APP.md#radar-sources-and-timing).
 
-Reader stores document order, script hashes, capture conditions and progress in bounded passages. Reader recordings are excluded from the phrase classifier and retained for future sequence training. CTC training can use passage transcripts without word boundaries; forced alignment is useful for inspection and segment-level experiments. Voiced alignment cannot establish silent-articulation timing.
+Reader stores document order, script hashes, capture conditions and progress in bounded passages. Reader recordings are excluded from the phrase classifier and eligible for the experimental sentence worker after review. CTC training can use passage transcripts without word boundaries; forced alignment is useful for inspection and segment-level experiments. Voiced alignment cannot establish silent-articulation timing.
 
 ## Baseline model
 
@@ -28,4 +28,4 @@ Reserved validation/final-test visits cannot be used for fitting. Calibration re
 
 This is closed-vocabulary phrase classification. Raw data is preserved for later sequence-model experiments; continuous dictation requires a much larger dataset and further research. Synthetic signals are deliberately learnable and provide no evidence of speech accuracy.
 
-Transcription, text insertion, and radar predictions remain disabled in the installed app. The older source workbench can explicitly enable experimental classifier evaluation with `serve --research`. Its scores are uncalibrated; replaying training data is not an accuracy measurement. See [the research roadmap](ROADMAP.md) and [verification record](VERIFICATION.md).
+Live transcription and text insertion remain disabled. Offline training predictions are available in the [Training workspace](TRAINING.md). The older source workbench can explicitly enable experimental classifier evaluation with `serve --research`. Its scores are uncalibrated; replaying training data is not an accuracy measurement. See [the research roadmap](ROADMAP.md) and [verification record](VERIFICATION.md).

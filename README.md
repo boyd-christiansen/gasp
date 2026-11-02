@@ -35,7 +35,7 @@ Start with the **[documentation index](docs/README.md)** for setup and how-to gu
 - [Getting started](docs/GETTING_STARTED.md) — install, launch, and collect your first takes.
 - [Using Gasp](docs/MAC_APP.md) — controls, scripts, review, and local recordings.
 - [Hardware and enclosures](docs/ENCLOSURES.md) — choose a build, print parts, and connect the radar.
-- [Training and experiments](docs/EXPERIMENTS.md) — data collection, labels, and evaluation.
+- [Collect, train, evaluate](docs/TRAINING.md) — curriculum, training runs, results, and the rack worker.
 - [Contributing](CONTRIBUTING.md) — development and verification.
 
 Original project materials are available under the [MIT license](LICENSE).

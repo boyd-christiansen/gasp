@@ -30,3 +30,6 @@ dist/
 *.caf
 enclosure/iwr6843aop/AMAZON_ORDER.md
 enclosure/iwr6843aop/amazon-hardware*.png
+gasp/build-info.json
+*.pt
+gasp-training-*.zip

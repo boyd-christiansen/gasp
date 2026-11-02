@@ -17,14 +17,15 @@
 | [Mac app manual](MAC_APP.md) | Shortcuts, reference audio, take approval, timing, local files, and app builds |
 | [Enclosures](ENCLOSURES.md) | Full three-board case, single-board v2.2 enclosure, desktop mount, and print/assembly files |
 | [Hardware bring-up](HARDWARE.md) | USB firmware/ports, DCA wiring/networking, capture formats, and CLI alternatives |
+| [Collect, train, evaluate](TRAINING.md) | Training workspace, curriculum, frozen datasets, results and portable worker |
 | [Data and baseline training](DATA_AND_TRAINING.md) | Stored artifacts, supervision, timing limits, features, and model compatibility |
 | [Experiment plan](EXPERIMENTS.md) | Instrument checks, phrase collection, visit splits, and evaluation |
 | [Research roadmap](ROADMAP.md) | Milestones toward a useful desktop input device |
 | [Collection design and research](design/COLLECTION_JOURNEY.md) | Literature and design rationale behind the guided baseline; the interactive mock is a design reference |
-| [Training journey proposal](design/TRAINING_JOURNEY.md) | Proposed dictation curriculum, Training tab, evaluation contracts, build sequence and compute plan; not implemented |
+| [Training design](design/TRAINING_JOURNEY.md) | Design rationale, longer-term curriculum and remaining rack/decoder work |
 | [Verification record](VERIFICATION.md) | Software/emulator evidence and physical checks still required |
 | [Development](../CONTRIBUTING.md) | Tests, Mac builds, CAD consistency, and contribution conventions |
 | [Firmware helper](../firmware/README.md) | Optional host-tested packet encoder; not a built or flashed TI image |
 | [Third-party references](../THIRD_PARTY_NOTICES.md) | TI protocols, research, and implementation references |
 
-The installed app is training-focused: transcription, text insertion, and radar predictions remain disabled. USB transport has been physically verified; speech performance and DCA hardware still require validation. Recordings, reference media, trained models, purchase records, downloaded vendor packages, and viewer logs are excluded from the public repository.
+The installed app is training-focused: live transcription and text insertion remain disabled; offline training predictions are available. USB transport has been physically verified; speech performance and DCA hardware still require validation. Recordings, reference media, trained models, purchase records, downloaded vendor packages, and viewer logs are excluded from the public repository.

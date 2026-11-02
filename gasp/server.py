@@ -24,6 +24,7 @@ from .transport import ports
 from .replay import Replay
 from . import __version__
 from .journey import register_journey
+from .learning_api import register_learning
 
 STATIC = Path(__file__).parent / "static"
 
@@ -169,12 +170,14 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
     async def lifespan(app):
         yield
         engine.close()
+        learning.close()
         pool.shutdown(wait=True)
 
     app = FastAPI(title="Gasp", lifespan=lifespan)
     app.state.store, app.state.engine = store, engine
     app.state.research_enabled = research_enabled
-    register_journey(app, store, engine)
+    journey = register_journey(app, store, engine)
+    learning = register_learning(app, store, engine, journey)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -320,7 +323,7 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         with engine.lock:
             if engine.recording and engine.session and engine.session["id"] == sid:
                 raise ValueError("Finish the active recording before discarding this collection")
-            if any(sid in ids for ids in active_training.values()):
+            if any(sid in ids for ids in active_training.values()) or learning.active_for(sid):
                 raise ValueError("Wait for training that uses this collection to finish before discarding it")
             store.set_discarded(sid, True)
             if engine.session and engine.session["id"] == sid:
@@ -342,9 +345,10 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         with engine.lock:
             if engine.recording and engine.session and engine.session["id"] == sid:
                 raise ValueError("Finish the active recording before deleting this collection")
-            if any(sid in ids for ids in active_training.values()):
+            if any(sid in ids for ids in active_training.values()) or learning.active_for(sid):
                 raise ValueError("Wait for training that uses this collection to finish before deleting it")
             store.delete_session(sid)
+            learning.source_deleted(sid)
             replay.forget_session(sid)
             if engine.session and engine.session["id"] == sid:
                 engine.session = None

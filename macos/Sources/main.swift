@@ -335,6 +335,22 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                         result=aligned
                     }
                 case "audioPrepare": try audio.prepare(); result=audio.status()
+                case "exportTraining":
+                    guard let runId=body["runId"] as? String,
+                          runId.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil else { throw failure("Invalid training run.") }
+                    let panel=NSSavePanel()
+                    panel.nameFieldStringValue="gasp-training-\(runId.prefix(8)).zip"
+                    panel.title="Export training package"
+                    if panel.runModal() == .OK, let destination=panel.url {
+                        var request=URLRequest(url:URL(string:"/api/learning/runs/\(runId)/package",relativeTo:base)!.absoluteURL)
+                        request.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization")
+                        let (download,response)=try await URLSession.shared.download(for:request)
+                        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw failure("Training package is unavailable.") }
+                        defer { try? FileManager.default.removeItem(at:download) }
+                        if FileManager.default.fileExists(atPath:destination.path) { try FileManager.default.removeItem(at:destination) }
+                        try FileManager.default.copyItem(at:download,to:destination)
+                        result=["saved":true]
+                    } else { result=["saved":false] }
                 case "audioStatus": result=audio.status()
                 case "audioCool": audio.cool()
                 case "microphoneModes": AVCaptureDevice.showSystemUserInterface(.microphoneModes)

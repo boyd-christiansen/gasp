@@ -43,7 +43,7 @@ def main():
                 health = api('health')
                 assert not health['transcription_enabled'] and not health['research_predictions_enabled']
                 assert health['data_root'] == str((root/'data').resolve())
-                for asset in ['studio.js','timeline.js','journey.css','logo-particles.js','brand/face-open.png','brand/face-partial.png','brand/face-closed.png']:
+                for asset in ['studio.js','timeline.js','journey.css','learning.js','learning.css','logo-particles.js','brand/face-open.png','brand/face-partial.png','brand/face-closed.png']:
                     req = Request(f'http://127.0.0.1:{port}/static/{asset}',
                                   headers={'Authorization':'Bearer '+token})
                     with urlopen(req,timeout=10) as response:
@@ -94,6 +94,29 @@ def main():
                 assert result['status']=='complete',result
                 report = result['report']
                 assert report['synthetic'] and report['train_examples']==4 and report['test_examples']==4
+                scope=dict(subject='synthetic-fixture',source='simulator',profile=api('live')['profile']['sha256'])
+                assert api('learning')['destinations'][1]['available'] is False
+                inspected=api('learning/inspect','POST',scope)
+                assert inspected['ready'] and inspected['counts']['test']['takes']==4
+                learning=api('learning/runs','POST',scope)
+                deadline=time.monotonic()+20
+                while True:
+                    learning=api('learning/runs/'+learning['id'])
+                    if learning['status'] in {'complete','failed'}: break
+                    assert time.monotonic()<deadline,'Learning run timed out'
+                    time.sleep(.05)
+                assert learning['status']=='complete',learning
+                assert learning['result']['development']['metrics'] is None
+                assert learning['source']['version']=='0.7.0' and len(learning['source']['source_sha256'])==64
+                final=api('learning/runs/'+learning['id']+'/final-check','POST',{'confirm':True})
+                deadline=time.monotonic()+20
+                while True:
+                    final=api('learning/runs/'+final['id'])
+                    if final['status'] in {'complete','failed'}: break
+                    assert time.monotonic()<deadline,'Final check timed out'
+                    time.sleep(.05)
+                assert final['status']=='complete',final
+                assert final['result']['final_test']['metrics']['n']==4
                 api(f'sessions/{visits[0]}/discard','POST')
                 assert len(api('blocks')) == 1 and len(api('recordings')) == 4
                 assert api('discarded-collections')[0]['id'] == visits[0]
