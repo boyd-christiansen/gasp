@@ -21,9 +21,13 @@ button {min-height: 36px;}
 .text-button, .subtle, .eyebrow {color: var(--muted);}
 .eyebrow {font-size: 10px; letter-spacing: .08em;}
 .toolbar {min-height: 42px; padding: 6px 0;}
+.library-toggle {display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 6px 8px; color: var(--muted); font-size: 12px;}
+.library-toggle:hover, .library-toggle[aria-expanded="true"] {background: var(--soft); color: var(--ink);}
+.library-toggle svg {flex-shrink: 0;}
 .capture-content {max-width: 1120px; padding: 16px 0 24px;}
 .toolbar-end {min-width: 0;}
 #returnTraining {white-space: normal; text-align: right; font-size: 12px;}
+main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 .connection > .status {font-size: 12px;}
 .library {padding-top: 16px;}
 .library summary, .recording-item strong {font-size: 12px;}

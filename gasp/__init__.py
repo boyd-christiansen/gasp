@@ -1,2 +1,2 @@
 """Gasp. All acquisition is local; simulation is explicitly marked."""
-__version__ = "0.7.1"
+__version__ = "0.7.2"

@@ -2,6 +2,12 @@
 
 USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
+## Capture navigation — 0.7.2, 2026-11-02
+
+The Capture tab now returns to the overview through the existing draft-saving path. The library toggle is one labeled Recordings control; the inactive Capture label on the overview is removed. Radar controls remain right-aligned when Dictation hides the radar tabs.
+
+Synthetic browser checks verified collection detail → Capture, review with an edited note → Capture → reopened review with the note retained, library open/close, and the radar dropdown in Dictation. Radar controls had identical coordinates and dimensions across both workspaces at 1280 px; the 900 × 650 Capture layout had no horizontal overflow. JavaScript syntax and packaged capture/review/training checks passed. Installed **0.7.2 / build 14** has the updated assets; all 34 existing recording files retained their checksums. Physical radar and microphone capture were not retested for this navigation change.
+
 ## Workspace refinement — 0.7.1, 2026-11-02
 
 The existing software suite passed all **73 tests**, with the loopback-dependent capture tests run with local networking enabled. JavaScript syntax and whitespace checks passed. The isolated browser continuity fixture passed nine assertions covering focused input and selection, expanded details, a selected upload, filters, child workspace identity, updated progress, focused prediction actions and replacement of a genuinely different view.
