@@ -1,7 +1,8 @@
 'use strict';
 const Learning = (() => {
   let data=null, view='overview', recipe='phrase-v2', currentRun=null, omitted=[], voiced=false;
-  let timer=null, request=0, lastCohort='', pinnedRecipe=false;
+  let timer=null, request=0, lastCohort='', pinnedRecipe=false, returnContext=null;
+  const predictionViews=new Map();
   const active=new Set(['queued','preparing','training','evaluating','cancelling']);
   const root=()=>$('learningWorkspace');
   const clockText=seconds=>seconds>=3600?`${(seconds/3600).toFixed(1)} h`:seconds>=60?`${Math.floor(seconds/60)} min`:`${Math.round(seconds)} sec`;
@@ -17,34 +18,44 @@ const Learning = (() => {
   const context=()=>`${data.cohort.subject} · ${sourceName(data.cohort.source)} · ${profileLabel({sha256:data.cohort.profile})}`;
   function splits(counts){return `<div class="learn-splits">${[['train','Training'],['validation','Development'],['test','Final test']].map(([key,name])=>`<div class="learn-split"><h4>${name}${key==='test'?' · reserved':''}</h4><strong>${counts[key].takes}</strong><p>reviewed takes · ${clockText(counts[key].seconds)}</p><small>${counts[key].sittings} independent sitting${counts[key].sittings===1?'':'s'}</small></div>`).join('')}</div>`;}
   function bind(){root().querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>action(b.dataset.learn,b).catch(e=>notice(e.message,true)));}
-  function mount(html){root().innerHTML=html;bind();}
+  function mount(html){GaspWorkspace.render(root(),html,view==='run'?'run:'+currentRun:view);bind();}
   function sheet(title,html){const el=$('learningDialog');el.innerHTML=`<div class="section-heading"><h2 id="learningDialogTitle">${title}</h2><button class="icon-button" aria-label="Close">×</button></div>${html}<p id="learningDialogError" class="inline-error" role="alert" hidden></p>`;el.querySelector('.icon-button').onclick=()=>el.close();if(!el.open)el.showModal();return el;}
   function sheetAction(el,id,fn){el.querySelector('#'+id).onclick=async()=>{const b=el.querySelector('#'+id);b.disabled=true;try{await fn();}catch(e){$('learningDialogError').textContent=e.message;$('learningDialogError').hidden=false;}finally{b.disabled=false;}};}
   function schedule(){clearTimeout(timer);if(tab==='train'&&!dictation&&data?.runs.some(r=>active.has(r.status)))timer=setTimeout(()=>refresh().catch(e=>notice(e.message,true)),1300);}
   async function refresh(){const seq=++request;const value=await api('learning?'+cohortQuery());if(seq!==request)return;data=value;
     if(lastCohort!==data.cohort.id){lastCohort=data.cohort.id;omitted=[];voiced=false;view='overview';pinnedRecipe=false;}
-    if(!pinnedRecipe)recipe=data.runs.some(r=>r.recipe.id==='phrase-v2'&&r.kind==='fit'&&r.status==='complete')?'radar-ctc-v1':'phrase-v2';
+    if(!pinnedRecipe)recipe=data.runs.find(r=>r.kind==='fit')?.recipe.id||'phrase-v2';
     if(view==='overview')renderOverview();else if(view==='run'&&currentRun)await openRun(currentRun,false);else if(view==='curriculum')renderCurriculum();schedule();
   }
-  async function open(){await refresh();if(view==='dataset')await openDataset();}
+  async function open(){await refresh();if(view==='dataset')await openDataset();if(returnContext){document.querySelector('main').scrollTop=returnContext.scroll;clearReturn();}}
+  function clearReturn(){returnContext=null;$('returnTraining').hidden=true;}
+  async function returnFromRecording(){await saveIfDirty();showTab('train');}
+  async function openRecording(sid,tid){const origin={scroll:document.querySelector('main').scrollTop};await openTake(sid,tid);returnContext=origin;$('returnTraining').textContent=view==='run'?'← Back to training result':'← Back to dataset';$('returnTraining').hidden=false;}
+  $('returnTraining').onclick=()=>returnFromRecording().catch(e=>notice(e.message,true));
   function recommendationAction(){const r=data.recommendation;return r.kind==='review'?'Review takes':r.kind==='collection'?'Continue collection':'Start a session';}
-  function renderOverview(){const inv=inventory(),latest=data.runs.find(r=>r.recipe.id===recipe&&r.kind==='fit'&&r.status==='complete'),running=data.runs.find(r=>active.has(r.status)),prepared=data.runs.find(r=>r.status==='prepared');
-    let title,description,cta,actionName;
-    if(running){title='Your model is taking shape.';description='You can inspect progress and return to your recordings while this run finishes.';cta='View training';actionName='active';}
-    else if(prepared&&recipe===prepared.recipe.id){title='Your training job is prepared.';description='The frozen dataset is ready for a scheduled worker. The rack connection is the next setup step.';cta='View prepared job';actionName='prepared';}
-    else if(inv.ready){title=latest?'Ready for another training run.':recipe==='phrase-v2'?'Ready for your first phrase check.':'Ready to try sentence learning.';description=recipe==='phrase-v2'?'Learn from your silent phrases, then check what carries across to another sitting.':'Train from whole utterances. Word timing is optional; your reviewed text is the target.';cta=recipe==='phrase-v2'?'Train phrase model':'Prepare sentence model';actionName='prepare';}
-    else{title=recipe==='phrase-v2'?'Build your first model.':'Build your sentence dataset.';description=recipe==='phrase-v2'?'Start with the guided baseline. Reviewed phrases will become your first training dataset.':'Add varied sentences in short sessions. Training will measure how well the radar recognizes new text.';cta=recommendationAction();actionName='recommendation';}
-    const step=running?2:latest?3:1;
-    mount(header('Personal dictation',context(),button('curriculum','View curriculum','class="text-button"'))+
-      `<div class="learn-path">${['Collect','Train','Evaluate'].map((t,i)=>`${i?'<b></b>':''}<span class="${step===i+1?'current':''}"><i>${i+1}</i>${t}</span>`).join('')}</div>
-      <div class="learn-hero"><div><span class="eyebrow">${recipe==='phrase-v2'?'FIRST MILESTONE · PHRASE CHECK':'NEXT MILESTONE · SENTENCE MODEL'}</span><h3>${title}</h3><p>${description}</p>${button(actionName,cta+' '+icon('arrow'),'class="primary"')}</div><div class="hero-mark"><img src="/static/brand/face-open.png" alt=""></div></div>
-      <div class="learn-stats"><div class="learn-stat"><strong>${clockText(inv.counts.train.silent_seconds)}</strong><span>silent training data</span></div><div class="learn-stat"><strong>${inv.counts.train.utterances}</strong><span>distinct training ${recipe==='phrase-v2'?'phrases':'utterances'}</span></div><div class="learn-stat"><strong>${inv.counts.train.sittings}</strong><span>training sittings</span></div></div>
-      <div class="learn-section-head"><h3>Your dataset</h3>${button('dataset','View data '+icon('arrow'),'class="text-button"')}</div>
-      <p class="learn-muted">${inv.counts.validation.takes} development takes · ${inv.counts.test.takes} final-test takes reserved</p>
-      ${inv.excluded.some(r=>r.reason==='Needs review')?`<p class="learn-muted">${inv.excluded.filter(r=>r.reason==='Needs review').length} takes are waiting for review.</p>`:''}
-      ${latest?.development?`<section class="learn-section"><div class="learn-section-head"><h3>Latest development result</h3>${button('run','Open result '+icon('arrow'),`class="text-button" data-id="${latest.id}"`)}</div><div class="learn-score">${percent(latest.development.wer??latest.development.accuracy)} <small>${latest.development.wer!==undefined?'silent word error':'phrase accuracy'}</small></div><p class="learn-muted">${latest.development.n} held-out recordings${latest.cohort.synthetic?' · synthetic verification':''}</p>${curve(latest)}</section>`:''}
-      ${inv.ready?`<div class="learn-next">${icon('speech')}<div><strong>${esc(data.recommendation.title)}</strong><p>${esc(data.recommendation.description)}</p></div>${button('recommendation',recommendationAction())}</div>`:''}
-      <section class="learn-section"><div class="learn-section-head"><h3>Training history</h3>${button('chooseTask',recipe==='phrase-v2'?'Phrase check ▾':'Sentence model ▾','class="text-button"')}</div>${data.runs.length?data.runs.map(runRow).join(''):'<div class="learn-empty">Your training runs and results will appear here.</div>'}</section>`);
+  function renderOverview(){
+    const inv=inventory(),runs=data.runs.filter(r=>r.recipe.id===recipe),latest=runs.find(r=>r.kind==='fit'&&r.status==='complete');
+    const running=data.runs.find(r=>active.has(r.status)),prepared=runs.find(r=>r.status==='prepared');
+    const next=data.recommendation,step=data.baseline.steps.find(s=>s.unlocked&&!s.complete);
+    let title,description,cta,actionName,actionId='',label='NEXT STEP',evidence='';
+    if(running){label=statusText(running);title=running.name;description=running.progress?.epoch?`Epoch ${running.progress.epoch} of ${running.progress.epochs}`:'Follow progress while the model learns from your recordings.';cta='View run';actionName='run';actionId=running.id;}
+    else if(prepared){label='PREPARED · NOT SUBMITTED';title='Ready for the worker.';description='Your dataset is packaged. Export it for a scheduled training job.';cta='Open prepared job';actionName='run';actionId=prepared.id;}
+    else if(latest){label='LATEST RESULT';title=latest.name;description=latest.development?`${latest.development.n} held-out recordings${latest.cohort.synthetic?' · synthetic verification':''}`:'Model fitted. Add independent development recordings to measure performance.';cta='Inspect result';actionName='run';actionId=latest.id;
+      if(latest.development){const m=latest.development;evidence=`<div class="learn-outcome"><strong>${percent(m.wer??m.accuracy)}</strong><span>${m.wer!==undefined?'silent word error · lower is better':'phrase accuracy · higher is better'}</span></div>`;}}
+    else if(inv.ready){label='READY TO TRAIN';title=recipe==='phrase-v2'?'Run your first phrase check.':'Try sentence learning.';description=recipe==='phrase-v2'?'Measure which phrases carry across to another sitting.':'Use reviewed utterances to learn sequences. Word timing is optional.';cta=recipe==='phrase-v2'?'Train phrase model':'Prepare sentence model';actionName='prepare';}
+    else{title=next.title;description=next.description;cta=recommendationAction();actionName='recommendation';
+      if(step)evidence=`<div class="learn-baseline"><span>${step.verified} of ${step.total} reviewed</span><div class="learn-progress"><span style="width:${step.total?100*step.verified/step.total:0}%"></span></div></div>`;}
+    mount(header('Personal dictation',context(),button('curriculum','Curriculum '+icon('arrow'),'class="text-button"'))+
+      `<section class="learn-focus"><div><span class="eyebrow">${esc(label)}</span><h3>${esc(title)}</h3><p>${esc(description)}</p>${evidence}</div><div class="learn-focus-action">${button(actionName,cta+' '+icon('arrow'),`class="primary" data-id="${actionId}"`)}</div></section>
+      ${latest?curve(latest):''}
+      <section class="learn-section"><div class="learn-section-head"><h3>Dataset</h3>${button('dataset','View data '+icon('arrow'),'class="text-button"')}</div>
+      ${inv.counts.train.takes?`<div class="learn-data-line"><span><strong>${clockText(inv.counts.train.silent_seconds)}</strong> silent training signal</span><span><strong>${inv.counts.train.utterances}</strong> distinct ${recipe==='phrase-v2'?'phrases':'utterances'}</span><span><strong>${inv.counts.train.sittings}</strong> sitting${inv.counts.train.sittings===1?'':'s'}</span></div>`:'<p class="learn-muted">Reviewed speech will appear here.</p>'}
+      ${inv.counts.validation.takes||inv.counts.test.takes?`<p class="learn-muted">${inv.counts.validation.takes} development takes · ${inv.counts.test.takes} final-test takes reserved</p>`:''}
+      ${inv.blockers.length?`<p class="learn-requirement">${esc(inv.blockers[0])}</p>`:''}
+      ${latest&&inv.ready?button('prepare',recipe==='phrase-v2'?'Train another model':'Prepare another model','class="text-button"'):''}</section>
+      ${latest?`<div class="learn-next">${icon('speech')}<div><strong>${esc(next.title)}</strong><p>${esc(next.description)}</p></div>${button('recommendation',recommendationAction())}</div>`:''}
+      <section class="learn-section"><div class="learn-section-head"><h3>Training history</h3><label class="learn-model-select">Model<select id="learningRecipe" aria-label="Model type"><option value="phrase-v2">Phrase check</option><option value="radar-ctc-v1">Sentence model</option></select></label></div>${runs.length?runs.map(runRow).join(''):'<p class="learn-empty">No runs yet.</p>'}</section>`);
+    $('learningRecipe').value=recipe;$('learningRecipe').onchange=e=>{recipe=e.target.value;pinnedRecipe=true;renderOverview();};
   }
   function runRow(r){const m=r.kind==='final'?r.final_test:r.development;return button('run',`<span><strong>${esc(r.name)}${r.kind==='final'?' · final check':''}</strong><small>${date(r.created_ns)} · ${r.kind==='final'?r.counts.test.takes:r.counts.train.takes} ${r.kind==='final'?'test':'training'} takes</small></span>${status(r)}<span class="run-score">${m?percent(m.wer??m.accuracy):'—'}${m?`<small>${m.wer!==undefined?'silent word error':'accuracy'}</small>`:''}</span>${icon('arrow')}`,`class="learn-run-row" data-id="${r.id}"`);}
   function curve(latest){const points=data.runs.filter(r=>r.kind==='fit'&&r.status==='complete'&&r.recipe.id===latest.recipe.id&&r.evaluation_key===latest.evaluation_key&&r.development).reverse();if(points.length<2)return '';
@@ -53,7 +64,7 @@ const Learning = (() => {
   }
   async function openDataset(){view='dataset';const inv=await api('learning/inspect','POST',scope());
     mount(breadcrumb('Dataset')+header(recipe==='phrase-v2'?'Phrase recordings':'Sentence recordings',context(),button('prepare',recipe==='phrase-v2'?'Train model':'Prepare model',`class="primary" ${inv.ready?'':'disabled'}`))+
-      `<div class="learn-choice"><label>Training task</label><select id="learningTask"><option value="phrase-v2">Phrase check</option><option value="radar-ctc-v1">Sentence model</option></select></div>${splits(inv.counts)}
+      `<div class="learn-choice"><label for="learningTask">Training task</label><select id="learningTask"><option value="phrase-v2">Phrase check</option><option value="radar-ctc-v1">Sentence model</option></select></div>${splits(inv.counts)}
       ${inv.blockers.map(t=>`<p class="learn-note warning">${esc(t)}</p>`).join('')}
       <section class="learn-section"><div class="learn-section-head"><h3>Collections in this dataset</h3><span class="learn-muted">Roles follow the collection</span></div>
       ${inv.sessions.length?inv.sessions.map(s=>`<div class="learn-session"><input type="checkbox" data-session="${s.id}" ${omitted.includes(s.id)?'':'checked'} aria-label="Include ${esc(s.name)}"><div><strong>${esc(s.name)}</strong><small>${esc(({train:'Training',validation:'Development',test:'Reserved final test',calibration:'Calibration reference'})[s.role]||'Unassigned')} · ${s.included} eligible takes</small></div>${s.pending?button('reviewSession',`Review ${s.pending}`,`data-id="${s.id}"`):'<span>Reviewed</span>'}</div>`).join(''):'<p class="learn-empty">Record a collection and review its takes to populate this dataset.</p>'}</section>
@@ -81,14 +92,14 @@ const Learning = (() => {
     else if(m){const sequence=m.wer!==undefined,value=sequence?m.wer:m.accuracy,old=comparison?.development?.[sequence?'wer':'accuracy'];const delta=old!==undefined?(value-old)*100:null;
       body=`<div class="learn-result-top"><div><span class="eyebrow">${r.kind==='final'?'FINAL TEST':'DEVELOPMENT SET'}</span><div class="learn-score">${percent(value)}</div><p>${sequence?'Silent word error · lower is better':'Phrase accuracy · higher is better'}<br>${m.n} recordings${r.cohort.synthetic?' · synthetic verification only':''}</p></div><div class="learn-compare"><strong>${delta===null?'A first point of comparison':`${Math.abs(delta).toFixed(1)} percentage points ${delta===0?'· unchanged':delta>0?'higher':'lower'}`}</strong><p>${delta===null?'Compare future runs on these same held-out recordings.':`Compared with ${date(comparison.created_ns)} on the same development set.`}</p>${sequence?`<p>${m.substitutions} substitutions · ${m.insertions} insertions · ${m.deletions} deletions<br>${percent(m.cer)} character error</p>`:`<p>Macro F1 ${m.macro_f1.toFixed(3)} · majority baseline ${percent(m.majority_baseline)}${m.duration_only_accuracy!==undefined?`<br>Duration-only baseline ${percent(m.duration_only_accuracy)}`:''}</p>`}</div></div>
       ${r.kind==='fit'?curve({...r,development:m}):''}
-      <section class="learn-section"><div class="learn-section-head"><h3>What the model heard</h3><select id="learningPredictionFilter" aria-label="Filter predictions"><option value="errors">Errors first</option><option value="all">All recordings</option></select></div>${sequence?'<p class="learn-muted">Underlined words differ; struck-out words were missed.</p>':''}<div id="learningPredictions"></div></section>
+      <section class="learn-section"><div class="learn-section-head"><h3>What the model heard</h3><select id="learningPredictionFilter" aria-label="Filter predictions"><option value="errors">Errors first</option><option value="all">All recordings</option></select></div>${sequence?'<p class="learn-muted">Underlined words differ; struck-out words were missed.</p>':''}<div id="learningPredictions" data-preserve-children></div></section>
       ${!sequence?matrix(m):''}${sequence&&result.by_mode?`<details class="learn-details"><summary>Results by speaking mode & sitting</summary>${Object.entries(result.by_mode).map(([mode,value])=>`<p>${esc(speechLabel(mode))}: ${percent(value.wer)} word error · ${value.n} takes</p>`).join('')}${Object.entries(result.by_sitting).map(([sitting,value])=>`<p class="learn-muted">Sitting ${esc(sitting.slice(0,8))}: ${percent(value.wer)} word error · ${value.n} takes</p>`).join('')}</details>`:''}`;
     }else{body='<div class="learn-note"><strong>Model fitted.</strong><p>There were no eligible silent development recordings in this snapshot. Complete Return & repeat, then train with that independent check included.</p></div>';}
     mount(breadcrumb(r.kind==='final'?'Final check':'Training run')+header(r.name+(r.kind==='final'?' · final check':''),`${date(r.created_ns)} · ${context()}`,status(r))+body+
       `${!r.availability.available?'<p class="learn-note warning">Some source recordings have been deleted. This historical result is retained, but the dataset cannot be reproduced.</p>':''}
       <div class="learn-run-actions">${r.status==='complete'&&r.kind==='fit'?(finalRun?button('run','View final check',`data-id="${finalRun.id}"`):button('final','Check final model',`data-id="${id}"`)):''}${button('recommendation','Collect next batch '+icon('arrow'),'class="text-button"')}${button('snapshot','View frozen dataset',`class="text-button" data-id="${r.dataset_id}"`)}</div>
       <details class="learn-details"><summary>Run details</summary><p class="learn-muted">${esc(r.recipe.algorithm)} · ${esc(r.destination==='local'?'This Mac':'Portable worker')} · ${esc(r.source.version)}</p><pre>${esc(JSON.stringify({run:r.id,dataset:r.dataset_id,checksum:r.dataset_sha256,source:r.source,worker:r.worker||null,progress:r.progress||null},null,2))}</pre></details>`);
-    if(m){renderPredictions(result.predictions,r.id);$('learningPredictionFilter').onchange=()=>renderPredictions(result.predictions,r.id);}
+    if(m){const prefs=predictionViews.get(r.id)||{filter:'errors',limit:40};$('learningPredictionFilter').value=prefs.filter;renderPredictions(result.predictions,r.id,prefs.limit);$('learningPredictionFilter').onchange=()=>renderPredictions(result.predictions,r.id,40);}
     if($('learningResult'))$('learningResult').onchange=async e=>{const file=e.target.files[0];if(!file)return;e.target.disabled=true;try{const response=await fetch(`/api/learning/runs/${id}/result`,{method:'POST',headers:{'Content-Type':'application/zip'},body:file});const value=await response.json();if(!response.ok)throw new Error(value.detail||'Import failed');await refresh();}catch(error){notice(error.message,true);e.target.disabled=false;}};
   }
   function marked(expected,hypothesis){
@@ -101,8 +112,8 @@ const Learning = (() => {
       else{parts.push(`<del title="Missing word">${esc(a[--i])}</del>`);}}
     return parts.reverse().join(' ');
   }
-  function renderPredictions(rows,rid,limit=40){const sorted=[...rows];if($('learningPredictionFilter').value==='errors')sorted.sort((a,b)=>Number(a.correct)-Number(b.correct));const shown=sorted.slice(0,limit);
-    $('learningPredictions').innerHTML=shown.map(r=>`<div class="learn-prediction"><div><p><small>Recorded</small>${esc(r.expected)}</p><p class="hypothesis"><small>Predicted</small>${r.predicted?marked(r.expected,r.predicted):'<em>No text</em>'}</p><p class="annotation-note">${esc(speechLabel(r.articulation))} · frozen annotation ${r.annotation_revision}${r.control?' · movement/background':''}</p></div>${button('take','Open recording '+icon('arrow'),`data-sid="${r.session_id}" data-id="${r.trial_id}" data-run="${rid}"`)}</div>`).join('')+(rows.length>limit?`<button id="learnMorePredictions" class="text-button">Show more · ${shown.length} of ${rows.length}</button>`:'');bind();
+  function renderPredictions(rows,rid,limit=40){predictionViews.set(rid,{filter:$('learningPredictionFilter').value,limit});const sorted=[...rows];if($('learningPredictionFilter').value==='errors')sorted.sort((a,b)=>Number(a.correct)-Number(b.correct));const shown=sorted.slice(0,limit);
+    GaspWorkspace.render($('learningPredictions'),shown.map(r=>`<div class="learn-prediction"><div><p><small>Recorded</small>${esc(r.expected)}</p><p class="hypothesis"><small>Predicted</small>${r.predicted?marked(r.expected,r.predicted):'<em>No text</em>'}</p><p class="annotation-note">${esc(speechLabel(r.articulation))} · frozen annotation ${r.annotation_revision}${r.control?' · movement/background':''}</p></div>${button('take','Open recording '+icon('arrow'),`data-sid="${r.session_id}" data-id="${r.trial_id}" data-run="${rid}"`)}</div>`).join('')+(rows.length>limit?`<button id="learnMorePredictions" class="text-button">Show more · ${shown.length} of ${rows.length}</button>`:''),rid);bind();
     if($('learnMorePredictions'))$('learnMorePredictions').onclick=()=>renderPredictions(rows,rid,limit+40);
   }
   function matrix(m){return `<details class="learn-details"><summary>Confusion matrix</summary><p class="learn-muted">Rows are recorded labels; columns are predictions.</p><div class="learn-matrix"><table><thead><tr><th>Recorded / predicted</th>${m.labels.map((_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>${m.labels.map((label,i)=>`<tr><th>${i+1}. ${esc(label)}</th>${m.confusion_matrix[i].map((n,j)=>`<td class="${i===j?'diagonal':''}">${n||'·'}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`;}
@@ -132,17 +143,16 @@ const Learning = (() => {
     else if(name==='prepared')await openRun(data.runs.find(r=>r.status==='prepared').id);
     else if(name==='collection')await openCollection(element.dataset.id);
     else if(name==='reviewSession'){showTab('capture');await reviewSession(element.dataset.id);}
-    else if(name==='take'){await openTake(element.dataset.sid,element.dataset.id);if(element.dataset.run)notice('Opened current recording. The training result retains its frozen annotation.');}
+    else if(name==='take'){await openRecording(element.dataset.sid,element.dataset.id);}
     else if(name==='recommendation'){const r=data.recommendation;if(r.kind==='review')await openTake(r.session_id,r.trial_id);else if(r.kind==='collection')await openCollection(r.collection_id);else await newAssignment();}
     else if(name==='practice')await newAssignment();
     else if(name==='customText')await newAssignment(true);
     else if(name==='evaluationText')await newAssignment(true,true);
-    else if(name==='chooseTask'){recipe=recipe==='phrase-v2'?'radar-ctc-v1':'phrase-v2';pinnedRecipe=true;renderOverview();}
     else if(name==='cancel'){await api(`learning/runs/${element.dataset.id}/cancel`,'POST');await refresh();}
     else if(name==='retry'){const r=await api(`learning/runs/${element.dataset.id}/retry`,'POST');currentRun=r.id;await refresh();}
     else if(name==='download'){if(native)await bridge('exportTraining',{runId:element.dataset.id});else{const a=document.createElement('a');a.href=`/api/learning/runs/${element.dataset.id}/package`;a.download='gasp-training.zip';a.click();}}
     else if(name==='snapshot'){const snap=await api('learning/datasets/'+element.dataset.id);sheet('Frozen dataset',`<p class="learn-muted">${date(snap.created_ns)} · ${esc(snap.recipe.name)}</p>${splits(snap.counts)}<p class="learn-note">${snap.availability.available?'Source recordings are available.':'Some source recordings were deleted.'} This snapshot keeps the exact transcript and review revision used for training.</p><details class="learn-details"><summary>Manifest</summary><pre>${esc(JSON.stringify(snap,null,2))}</pre></details>`);}
     else if(name==='final'){const id=element.dataset.id;const el=sheet('Check the final model',`<p class="learn-muted">Evaluate this fixed model on your reserved final-test recordings. Use development results for further tuning; repeatedly consulting the final test makes it less independent.</p><p class="learn-note">This does not enable dictation. The result will be kept separately from development scores.</p><div class="dialog-actions"><button id="learnFinal" class="primary">Freeze candidate & evaluate</button></div>`);sheetAction(el,'learnFinal',async()=>{const r=await api(`learning/runs/${id}/final-check`,'POST',{confirm:true});el.close();currentRun=r.id;view='run';await refresh();});}
   }
-  return {open};
+  return {open,clearReturn};
 })();

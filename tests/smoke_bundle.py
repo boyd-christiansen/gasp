@@ -43,7 +43,7 @@ def main():
                 health = api('health')
                 assert not health['transcription_enabled'] and not health['research_predictions_enabled']
                 assert health['data_root'] == str((root/'data').resolve())
-                for asset in ['studio.js','timeline.js','journey.css','learning.js','learning.css','logo-particles.js','brand/face-open.png','brand/face-partial.png','brand/face-closed.png']:
+                for asset in ['studio.js','timeline.js','journey.css','learning.js','learning.css','workspace-ui.js','workspace.css','capture-review.js','logo-particles.js','brand/face-open.png','brand/face-partial.png','brand/face-closed.png']:
                     req = Request(f'http://127.0.0.1:{port}/static/{asset}',
                                   headers={'Authorization':'Bearer '+token})
                     with urlopen(req,timeout=10) as response:

@@ -2,7 +2,7 @@
 // All tracks share radar time. Word annotations stay unplaced until explicitly aligned.
 const channels={audio:true,words:true,phase:true,range:true};
 let trackLayout={},trackCache={},spanSignature='',transcriptSignature='';
-function trackGeometry(){let y=32;const rows={};for(const [key,height]of Object.entries({audio:72,words:60,phase:80,range:100})){if(channels[key]){rows[key]={y,height};y+=height;}}return{rows,height:y+8};}
+function trackGeometry(){let y=32;const rows={};for(const [key,height]of Object.entries({audio:52,words:50,phase:64,range:76})){if(channels[key]){rows[key]={y,height};y+=height;}}return{rows,height:y+8};}
 function renderUnplaced(){renderTranscript();}
 function renderTranscript(){const signature=words.map(w=>[w.text,w.start_s,w.end_s].join('|')).join('\n');if(signature!==transcriptSignature){transcriptSignature=signature;$('reviewTranscript').innerHTML=words.length?words.map((w,i)=>`<button data-transcript="${i}" class="${w.start_s==null?'unplaced':''}" title="${w.start_s==null?'Timing not placed':w.start_s.toFixed(2)+' seconds'}">${esc(w.text)}</button>`).join(' '):'<span class="subtle">Add or confirm the text below. Word timing is optional.</span>';$('reviewTranscript').querySelectorAll('button').forEach(b=>b.onclick=()=>{pause();wordIndex=Number(b.dataset.transcript);wordPlacement=words[wordIndex].start_s==null;if(words[wordIndex].start_s!=null){setTime(words[wordIndex].start_s);followTimeline();requestFrame(true);}else drawTimeline();updateWordLabel();});}
  $('reviewTranscript').querySelectorAll('button').forEach(b=>{const i=Number(b.dataset.transcript),w=words[i];b.classList.toggle('active',w.start_s!=null&&time>=w.start_s&&time<=w.end_s);b.classList.toggle('selected',i===wordIndex);});}

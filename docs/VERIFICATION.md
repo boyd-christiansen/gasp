@@ -2,6 +2,14 @@
 
 USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
+## Workspace refinement — 0.7.1, 2026-11-02
+
+The existing software suite passed all **73 tests**, with the loopback-dependent capture tests run with local networking enabled. JavaScript syntax and whitespace checks passed. The isolated browser continuity fixture passed nine assertions covering focused input and selection, expanded details, a selected upload, filters, child workspace identity, updated progress, focused prediction actions and replacement of a genuinely different view.
+
+Browser checks used synthetic data only: baseline navigation; setup/resume; timed rest with its countdown; self-paced movement and speech with release-to-save; inline saved-take review; Keep & continue back to the recorder; movement review without transcript controls; keyboard word-boundary marking and undo; expandable radar inspection; model selection; prepared and completed run states; and return from a recording to the same result with its prediction filter retained. Layout checks at 900 × 650 and 1280 × 800, including the open recording library and radar inspector, found no horizontal overflow and one vertical scroll surface.
+
+These checks do not establish real speech accuracy or revalidate the physical radar or microphone. Real recordings were not used by the fixtures. The design guidance in [Product design](design/PRODUCT_DESIGN.md) includes further failure and accessibility scenarios to retain in subsequent changes.
+
 ## Collect / train / evaluate — 0.7.0, 2026-11-01
 
 The final software suite passed **73 tests**. The optional PyTorch checks include a deliberately simple two-pattern CTC overfit, checkpoint reload/resume, impossible target lengths and short-take invariance to batch padding. New integration checks cover immutable reviewed labels, split leakage, local cancellation, restart recovery, deletion dependencies, separate final evaluation, scheduled-worker package/result roundtrips and tampered candidate rejection. The allocation ID in worker tests is a test fixture, not a live Slurm job.

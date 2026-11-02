@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import uvicorn
+from fastapi.responses import FileResponse
 from gasp.cli import seed_demo
 from gasp.server import create_app
 from gasp.storage import atomic_json
@@ -24,4 +25,8 @@ if not store.sessions():
             store.update_trial(sid,t['id'],dict(confirmed_text=t['label'],accepted=True))
     atomic_json(root/'preferences.json',dict(setup=dict(subject='synthetic-fixture',location='UI verification',distance_cm=45),
         connection=dict(source='simulator',profile='usb-phase-20hz'),reference_audio=False))
+@app.get('/ui-check')
+def ui_check():
+    return FileResponse(Path(__file__).with_name('workspace_check.html'))
+
 uvicorn.run(app,host='127.0.0.1',port=args.port,access_log=False)

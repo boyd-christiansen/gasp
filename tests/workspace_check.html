@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Gasp workspace verification</title>
+<style>
+body{margin:0;background:#ddd;font:12px system-ui;color:#222}header{height:44px;display:flex;align-items:center;gap:12px;padding:0 16px}button,select{font:inherit;padding:5px 10px}iframe{display:block;background:white;border:0;margin:0 auto}#testRoot{position:fixed;top:50px;left:10px;padding:10px;background:white;z-index:5}#testRoot:empty{display:none}
+</style>
+<header><strong>SIMULATOR · UI checks</strong><select id="size" aria-label="Window size"><option value="900,650">900 × 650</option><option value="1280,800">1280 × 800</option><option value="1600,1000">1600 × 1000</option></select><button id="verify">Verify update continuity</button><button id="layout">Check layout</button><output id="result" role="status"></output></header>
+<iframe id="workspace" title="Isolated Gasp workspace" src="/training" width="900" height="650"></iframe><div id="testRoot"></div>
+<script src="/static/workspace-ui.js"></script>
+<script>
+document.getElementById('size').onchange=e=>{const [w,h]=e.target.value.split(',');const f=document.getElementById('workspace');f.width=w;f.height=h;};
+document.getElementById('layout').onclick=()=>{const f=document.getElementById('workspace'),d=f.contentDocument,w=f.contentWindow;const visible=e=>e.getClientRects().length&&w.getComputedStyle(e).visibility!=='hidden';const scrollers=[...d.querySelectorAll('*')].filter(e=>visible(e)&&['auto','scroll'].includes(w.getComputedStyle(e).overflowY)&&e.scrollHeight>e.clientHeight+2&&!['TEXTAREA','SELECT'].includes(e.tagName));const overflow=d.documentElement.scrollWidth>d.documentElement.clientWidth||d.querySelector('main').scrollWidth>d.querySelector('main').clientWidth;document.getElementById('result').textContent=`Layout: ${overflow?'HORIZONTAL OVERFLOW':'no horizontal overflow'} · ${scrollers.length} vertical scroll surface(s)`;};
+document.getElementById('verify').onclick=()=>{
+ const root=document.getElementById('testRoot'),out=document.getElementById('result');let checks=0;
+ const assert=(test,message)=>{if(!test)throw Error(message);checks++;};
+ const html=n=>`<h3>Phase ${n}</h3><details id="details"><summary>Run details</summary>Details ${n}</details><input id="input" value="original"><input type="file" id="file"><select id="filter"><option value="errors">Errors first</option><option value="all">All</option></select><div id="predictions" data-preserve-children></div><button data-ui-key="cancel">Cancel ${n}</button>`;
+ try{
+  GaspWorkspace.render(root,html(1),'run');
+  const input=document.getElementById('input'),file=document.getElementById('file'),details=document.getElementById('details'),filter=document.getElementById('filter'),predictions=document.getElementById('predictions');
+  details.open=true;filter.value='all';input.value='unfinished edit';input.focus();input.setSelectionRange(3,5);
+  const dt=new DataTransfer();dt.items.add(new File(['fixture'],'result.zip'));file.files=dt.files;
+  predictions.innerHTML='<button id="prediction">Open recording</button>';const prediction=document.getElementById('prediction');
+  GaspWorkspace.render(root,html(2),'run');
+  assert(document.activeElement===input,'Update lost input focus');
+  assert(input.value==='unfinished edit'&&input.selectionStart===3&&input.selectionEnd===5,'Update lost unfinished input or caret');
+  assert(details===document.getElementById('details')&&details.open,'Update closed details');
+  assert(file===document.getElementById('file')&&file.files[0].name==='result.zip','Update lost pending upload');
+  assert(filter.value==='all','Update reset filter');
+  assert(prediction===document.getElementById('prediction'),'Parent update removed child workspace');
+  assert(root.querySelector('h3').textContent==='Phase 2','Visible progress did not update');
+  prediction.focus();GaspWorkspace.render(predictions,'<button id="prediction">Open updated recording</button>','predictions');
+  // A new identity intentionally replaces a view; later updates retain it.
+  const stable=document.getElementById('prediction');stable.focus();GaspWorkspace.render(predictions,'<button id="prediction">Open newest recording</button>','predictions');
+  assert(document.activeElement===stable&&stable.textContent==='Open newest recording','Prediction update lost focused action');
+  GaspWorkspace.render(root,'<p id="next">Next run</p>','different-run');
+  assert(!root.querySelector('details')&&root.textContent==='Next run','New view retained stale controls');
+  out.textContent=`Passed ${checks} continuity checks`;
+ }catch(e){out.textContent='FAILED: '+e.message;throw e;}
+ finally{root.replaceChildren();}
+};
+</script></html>

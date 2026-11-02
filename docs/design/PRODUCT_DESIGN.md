@@ -1,6 +1,8 @@
 # Gasp product design
 
-Design review · 2 November 2026 · against Gasp 0.7.0. This records proposed refinements, not shipped changes. It complements the [collection journey](COLLECTION_JOURNEY.md) and [training journey](TRAINING_JOURNEY.md).
+Design review · 2 November 2026 · against Gasp 0.7.0.
+
+**Implementation update — 0.7.1:** The first refinement pass implements the focused baseline, compact recording/review layout, inline capture outcomes, return paths from review, state-based Training overview, model selector, and control-preserving progress updates. Companion capture remains a future feature. The principles and acceptance criteria below continue to guide subsequent work. It complements the [collection journey](COLLECTION_JOURNEY.md) and [training journey](TRAINING_JOURNEY.md).
 
 ## Direction
 
