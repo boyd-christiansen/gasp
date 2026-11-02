@@ -23,6 +23,7 @@
 | [Research roadmap](ROADMAP.md) | Milestones toward a useful desktop input device |
 | [Collection design and research](design/COLLECTION_JOURNEY.md) | Literature and design rationale behind the guided baseline; the interactive mock is a design reference |
 | [Training design](design/TRAINING_JOURNEY.md) | Design rationale, longer-term curriculum and remaining rack/decoder work |
+| [Product design](design/PRODUCT_DESIGN.md) | Interface principles, prioritized refinements, and interaction checks for future work |
 | [Verification record](VERIFICATION.md) | Software/emulator evidence and physical checks still required |
 | [Development](../CONTRIBUTING.md) | Tests, Mac builds, CAD consistency, and contribution conventions |
 | [Firmware helper](../firmware/README.md) | Optional host-tested packet encoder; not a built or flashed TI image |

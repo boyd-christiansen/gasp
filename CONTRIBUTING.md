@@ -14,6 +14,8 @@ The [v1.3 reinforced rear shell](enclosure/iwr6843aop/README_v1_3.md) has its ow
 
 ## Mac app
 
+For interface work, read [the product design guidance](docs/design/PRODUCT_DESIGN.md). Preserve the existing navigation and data semantics; review complete interaction sequences, including intermediate and failure states, rather than only finished screenshots.
+
 The training workspace is `gasp/static/training.*`; `macos/Sources` provides the native shell, modifier gesture, recording overlay and timestamped optional audio. `macos/backend.py` is the frozen worker entry point. Keep transcription disabled in this first release and preserve original prompts independently of reviewed transcripts.
 
 The collect/train/evaluate backend is `gasp/learning_*.py`; its UI is `gasp/static/learning.*`. Install `--extra training` to run the optional CTC tests as well as the core suite. `python tests/preview_learning.py` creates a synthetic UI workspace under ignored `test-data/`. Read [the worker contract](docs/TRAINING.md) before changing dataset roles, exported jobs or model artifacts. Never test against the installed app's real recordings.
