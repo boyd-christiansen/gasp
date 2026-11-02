@@ -107,7 +107,7 @@ def main():
                     time.sleep(.05)
                 assert learning['status']=='complete',learning
                 assert learning['result']['development']['metrics'] is None
-                assert learning['source']['version']=='0.7.0' and len(learning['source']['source_sha256'])==64
+                assert learning['source']['version']=='0.7.1' and len(learning['source']['source_sha256'])==64
                 final=api('learning/runs/'+learning['id']+'/final-check','POST',{'confirm':True})
                 deadline=time.monotonic()+20
                 while True:
