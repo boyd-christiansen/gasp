@@ -29,4 +29,8 @@ if not store.sessions():
 def ui_check():
     return FileResponse(Path(__file__).with_name('workspace_check.html'))
 
+@app.get('/ui-regression.js')
+def ui_regression():
+    return FileResponse(Path(__file__).with_name('workspace_regression.js'),media_type='text/javascript')
+
 uvicorn.run(app,host='127.0.0.1',port=args.port,access_log=False)

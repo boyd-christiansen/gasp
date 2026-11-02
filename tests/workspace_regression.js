@@ -1,0 +1,115 @@
+// Runs only in the isolated preview harness. Never mount this in the installed app.
+document.getElementById('audit').onclick=async()=>{
+ const button=document.getElementById('audit'),out=document.getElementById('result');button.disabled=true;
+ const w=document.getElementById('workspace').contentWindow,d=w.document,original=w.fetch.bind(w),passed=[];
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ const wait=async(fn,message)=>{const end=Date.now()+20000;while(!fn()){if(Date.now()>end)throw Error(message);await sleep(25);}};
+ const assert=(ok,message)=>{if(!ok)throw Error(message);passed.push(message);out.textContent=`Passed ${passed.length}: ${message}`;};
+ const click=s=>{const e=d.querySelector(s);if(!e)throw Error('Missing control '+s);e.click();};
+ const request=async(path,method='GET',body)=>{const r=await original('/api/'+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw Error(await r.text());return r.json();};
+ const home=async()=>{click('[data-tab="capture"]');await wait(()=>!d.getElementById('captureWelcome').hidden,'Capture did not return home');};
+ const training=async()=>{click('[data-tab="train"]');await wait(()=>!d.getElementById('trainingPage').hidden&&!!d.querySelector('[data-learn="dataset"]'),'Training did not open');};
+ const openTake=async(t)=>{if(d.getElementById('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);click(`[data-tid="${t.id}"]`);await wait(()=>d.getElementById('confirmedText').value===(t.confirmed_text||t.label)&&!d.getElementById('replayStage').hidden,'Recording did not open');};
+ const note=value=>{const e=d.getElementById('reviewNotes');e.value=value;e.dispatchEvent(new w.Event('input',{bubbles:true}));};
+ let release=null;
+ const delay=(path,method='GET')=>{let seen=false;w.fetch=async(url,opts={})=>{const response=await original(url,opts);if(!seen&&String(url)===path&&(opts.method||'GET')===method){seen=true;await new Promise(r=>release=r);}return response;};return()=>seen;};
+ try{
+  await wait(()=>!!d.querySelector('#journeyHome [data-collection]'),'Workspace did not load');
+  await request('disconnect','POST');await wait(()=>d.getElementById('connectionText').textContent==='Radar disconnected','Fixture did not disconnect');
+  const rect=()=>{const r=d.querySelector('.connection').getBoundingClientRect();return [r.x,r.y,r.width,r.height].join(',');},before=rect();
+  click('#dictationWorkspace');await wait(()=>!d.getElementById('dictationPage').hidden,'Dictation did not open');
+  assert(rect()===before,'Radar control stays anchored across workspaces');click('#radarWorkspace');
+  click('#journeyHome [data-collection]');await wait(()=>!d.getElementById('collectionDetail').hidden,'Collection did not open');await home();
+  assert(d.getElementById('sceneHome').hidden&&d.getElementById('sceneBreadcrumb').hidden,'Overview has no dead Capture breadcrumb');
+  const card=d.querySelector('#journeyHome [data-collection]'),collectionDelayed=delay('/api/collections/'+card.dataset.collection);card.click();await wait(collectionDelayed,'Collection request missing');await home();release();release=null;w.fetch=original;await sleep(100);
+  assert(!d.getElementById('captureWelcome').hidden,'A late collection response cannot reopen a dismissed page');
+  click('#connectionStatus');click('#togglePreview');
+  assert(!!d.querySelector('#settingsDialog .dialog-notice[role="alert"]'),'Settings failures appear inside the dialog');
+  click('[data-settings="setup"]');const subject=d.getElementById('subject'),oldSubject=subject.value;subject.value='Unsaved synthetic setup';subject.dispatchEvent(new w.Event('input',{bubbles:true}));
+  click('[data-settings="radar"]');click('[data-settings="setup"]');assert(subject.value==='Unsaved synthetic setup','Settings tabs preserve unsaved setup fields');
+  click('#closeSettings');click('#settingsButton');assert(subject.value==='Unsaved synthetic setup','Closing and reopening Settings retains its draft');click('#discardSetupDraft');assert(subject.value===oldSubject,'Discard setup explicitly restores saved values');click('#closeSettings');
+  const takes=(await request('recordings')).filter(t=>t.articulation==='silent'),first=takes[0],second=takes.find(t=>(t.confirmed_text||t.label)!==(first.confirmed_text||first.label));
+  if(!second)throw Error('Need two distinct synthetic phrases');
+  const delayed=delay(`/api/sessions/${first.session_id}/trials/${first.id}`);
+  if(d.getElementById('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);
+  click(`[data-tid="${first.id}"]`);await wait(delayed,'First take request missing');await openTake(second);release();release=null;await sleep(100);w.fetch=original;
+  assert(d.getElementById('confirmedText').value===(second.confirmed_text||second.label),'A late recording response cannot replace the selected take');
+  const takePath=`sessions/${second.session_id}/trials/${second.id}`,savedFirst=delay('/api/'+takePath,'PATCH');
+  note('First synthetic draft');click('#saveAnnotations');await wait(savedFirst,'Draft save did not start');
+  note('Newer synthetic edit');click('[data-tab="capture"]');release();release=null;w.fetch=original;
+  await wait(()=>!d.getElementById('captureWelcome').hidden,'Draft navigation did not finish');
+  assert((await request(takePath)).notes==='Newer synthetic edit','Edits made during a save are persisted before navigation');
+  await openTake(second);note('Synthetic quit draft');await w.gaspPrepareToQuit();
+  assert((await request(takePath)).notes==='Synthetic quit draft','Quit preflight saves the open review draft');
+  // Mark an interval through the actual keyboard handler, then exercise its real button.
+  click('#reviewTranscript [data-transcript="0"]');d.getElementById('timeline').focus();
+  for(const key of ['[','ArrowRight','ArrowRight',']'])d.getElementById('timeline').dispatchEvent(new w.KeyboardEvent('keydown',{key,bubbles:true}));
+  await wait(()=>!!d.querySelector('#wordSpans [data-word="0"]'),'Word span was not placed');
+  const edge=d.querySelector('#wordSpans [data-edge="end_s"]');edge.focus();edge.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await sleep(50);
+  assert(d.activeElement===edge,'Keyboard boundary edits retain focus');
+  click('#stepForward');click('#wordSpans [data-word="0"]');
+  assert(Number(d.getElementById('timeline').getAttribute('aria-valuenow'))===0,'Timeline word buttons seek on activation');
+  await home();await training();
+  const inspectDelayed=delay('/api/learning/inspect','POST');click('[data-learn="dataset"]');await wait(inspectDelayed,'Dataset request missing');
+  click('[data-learn="curriculum"]');release();release=null;await sleep(100);w.fetch=original;
+  assert(d.getElementById('learningWorkspace').textContent.includes('One useful session at a time.'),'A late dataset response cannot replace Curriculum');
+  await home();click('#connectionStatus');
+  w.fetch=(url,opts={})=>String(url)==='/api/connect'?Promise.resolve(new w.Response(JSON.stringify({detail:'Synthetic connection failure'}),{status:400,headers:{'Content-Type':'application/json'}})):original(url,opts);
+  click('#connectButton');await wait(()=>d.querySelector('.dialog-notice')?.textContent.includes('Synthetic connection failure'),'Connect error was not visible');
+  assert(!d.getElementById('connectButton').disabled&&!d.getElementById('source').disabled,'Failed connection restores usable settings controls');w.fetch=original;click('#closeSettings');
+  w.fetch=(url,opts)=>String(url)==='/api/live'?Promise.reject(Error('Synthetic offline')):original(url,opts);
+  await wait(()=>d.getElementById('connectionText').textContent==='Engine unavailable','Offline status stayed stale');
+  assert(d.getElementById('connectionText').textContent==='Engine unavailable','Lost backend connectivity is not shown as a connected radar');w.fetch=original;
+  await wait(()=>d.getElementById('connectionText').textContent==='Radar disconnected','Status did not recover');
+  // Enter a real synthetic calibration, then check shortcuts from a different screen and a modal.
+  click('#journeyHome [data-collection]');await wait(()=>!d.getElementById('collectionDetail').hidden,'Calibration did not open');if(d.getElementById('startFreshSession')){d.querySelector('#collectionDetail .collection-menu').open=true;click('#startFreshSession');}else click('#startCollection');await wait(()=>!d.getElementById('captureSetup').hidden,'Setup did not open');
+  await request('connect','POST',{source:'simulator',profile:'usb-phase-20hz'});await wait(()=>!d.getElementById('setupNext').disabled,'Simulator did not become ready');
+  click('#setupNext');await wait(()=>!d.getElementById('recordStage').hidden,'Recorder did not open');await training();
+  const timer=d.getElementById('captureTimer').textContent;w.dispatchEvent(new w.Event('gasp-toggle'));await sleep(100);
+  assert(d.getElementById('captureTimer').textContent===timer&&d.getElementById('recordingState').textContent!=='Get ready','Global shortcut cannot start a timed take from Training');
+  click('#radarWorkspace'); // Restores Training, not a hidden recorder.
+  assert(!d.getElementById('trainingPage').hidden,'Radar data restores the selected radar tab');
+  await home();click('#journeyHome [data-collection]');await wait(()=>!d.getElementById('collectionDetail').hidden,'Collection missing');click('#startCollection');await wait(()=>!d.getElementById('captureSetup').hidden,'Resume setup missing');click('#setupNext');await wait(()=>!d.getElementById('recordStage').hidden,'Resume missing');
+  click('#settingsButton');w.dispatchEvent(new w.Event('gasp-toggle'));await sleep(100);
+  assert(d.getElementById('recordingState').textContent!=='Get ready','Global shortcut cannot record through an open settings dialog');click('#closeSettings');
+  // Timed references, cancellation, and self-paced Enter hold/release use the real simulator.
+  const beforeCapture=(await request('recordings')).length;click('#recordButton');
+  await wait(()=>d.getElementById('recordingState').textContent==='Get ready','Countdown did not start');
+  let quitBlocked=false;try{await w.gaspPrepareToQuit();}catch{quitBlocked=true;}
+  assert(quitBlocked,'Quit is blocked while capture is active');w.dispatchEvent(new w.Event('gasp-cancel'));
+  await wait(()=>d.getElementById('recordingState').textContent==='Ready','Countdown did not cancel');
+  assert((await request('recordings')).length===beforeCapture,'Cancelling a countdown creates no recording');
+  click('#recordButton');await wait(()=>d.getElementById('captureMode').textContent==='MOVEMENT REFERENCE','Timed reference did not save and advance');
+  assert((await request('recordings')).length===beforeCapture+1,'Timed reference saves before advancing to movement');
+  const record=d.getElementById('recordButton');await wait(()=>!record.disabled,'Movement recording did not become ready');record.focus();record.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));
+  await wait(()=>d.getElementById('recordingState').textContent==='Recording','Enter did not begin a self-paced take');await sleep(900);
+  record.dispatchEvent(new w.KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true}));
+  await wait(()=>d.getElementById('promptText').textContent.includes('Purse your lips'),'Movement did not finish on release');
+  assert((await request('recordings')).length===beforeCapture+2,'Enter hold/release records a self-paced movement');
+  const sessionId=(await request('live')).session.id;
+  const reconnect=async profile=>{click('#connectionStatus');const source=d.getElementById('source');source.value='simulator';source.dispatchEvent(new w.Event('change'));const select=d.getElementById('profile');select.value=profile;select.dispatchEvent(new w.Event('change'));click('#connectButton');await wait(()=>!d.getElementById('connectButton').disabled&&d.querySelector('.dialog-notice')?.textContent==='Source connected','Apply and reconnect did not complete');click('#closeSettings');};
+  await reconnect('usb-phase-10hz');
+  await wait(()=>record.disabled&&d.getElementById('captureAvailability').textContent.includes('20 fps'),'Wrong profile did not block capture');
+  assert(record.disabled,'An incompatible radar profile cannot record into the current session');
+  await reconnect('usb-phase-20hz');await wait(()=>!record.disabled,'Compatible reconnect did not become ready');
+  record.focus();record.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));await wait(()=>d.getElementById('recordingState').textContent==='Recording','Reconnected recording did not begin');await sleep(900);record.dispatchEvent(new w.KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true}));
+  await wait(()=>d.getElementById('promptText').textContent.includes('pa pa pa'),'Reconnected movement did not finish');
+  assert((await request('live')).session.id===sessionId&&(await request('recordings')).length===beforeCapture+3,'Reconnecting resumes the same session before the next take');
+  await home();await training();click('[data-learn="prepare"]');await wait(()=>!!d.getElementById('learnStart'),'Training confirmation missing');click('#learnStart');
+  await wait(()=>!!d.getElementById('learningPredictions'),'Local training did not finish');
+  assert(d.getElementById('learningWorkspace').textContent.includes('DEVELOPMENT SET'),'Local phrase training reaches a measured development result');
+  click('[data-learn="take"]');await wait(()=>!d.getElementById('returnTraining').hidden,'Training return path missing');click('#returnTraining');
+  await wait(()=>!d.getElementById('trainingPage').hidden&&!!d.getElementById('learningPredictions'),'Training result did not restore');
+  assert(!!d.getElementById('learningPredictionFilter'),'Recording review returns to its training result');
+  click('[data-learn="final"]');await wait(()=>!!d.getElementById('learnFinal'),'Final confirmation missing');click('#learnFinal');
+  await wait(()=>d.getElementById('learningWorkspace').textContent.includes('Reserved final-test result'),'Final evaluation did not finish');
+  assert(!d.getElementById('learningWorkspace').textContent.includes('Compared with'),'Final-test results are not compared against development scores');
+  await home();if(d.getElementById('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);
+  click('#recordingList [data-delete-session]');await wait(()=>d.getElementById('discardDialog').open,'Delete warning missing');
+  assert(d.getElementById('discardDescription').textContent.includes('cannot be undone'),'Delete clearly warns before any removal');click('#cancelDiscard');
+  assert((await request('recordings')).length===beforeCapture+3,'Cancelling deletion retains all recordings');
+  await home();
+  out.textContent=`Passed ${passed.length} interaction regression checks`;out.dataset.results=JSON.stringify(passed);
+ }catch(error){out.textContent=`FAILED after ${passed.length}: ${error.message}`;out.dataset.results=JSON.stringify(passed);throw error;}
+ finally{if(release)release();w.fetch=original;button.disabled=false;}
+};

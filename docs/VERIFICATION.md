@@ -140,3 +140,16 @@ The DCA profile shares the corrected RF timing, so its recorded burst duration i
 - Native on-device speech following and annotation suggestions compile and are bundled. Real microphone permission, voice-follow accuracy, ASR word timing, and audio/radar offset validation remain interactive checks. Recognition requires an available local language model; no network fallback is enabled. Forced-alignment JSON import is implemented, but no aligner/model is bundled. Physical DCA capture remains unverified; Doppler reconstruction is covered by synthetic complete/incomplete burst tests.
 
 The collection UI supports resumable bounded passages, not uninterrupted whole-book recording. No human speech dataset or speech-accuracy result was produced by these checks.
+
+## Interaction audit · 0.7.3 · 2026-11-02
+
+The [interaction audit](design/INTERACTION_AUDIT.md) records the failures found and their fixes across navigation, setup, connections, capture, review, playback, training and native quit.
+
+- Python suite: **73 passed**, with one upstream Starlette/AnyIO deprecation warning. No physical hardware was contacted.
+- Isolated browser workspace: **29 interaction checks passed** against the real frontend, synthetic recordings and simulator acquisition. These include delayed navigation responses, edits during a pending save, quit preflight, setup drafts, connection failure, source/profile mismatch, reconnection into the same session, timed rest, self-paced movements, CPU training, reserved final evaluation, and deletion cancellation.
+- **9 continuity checks passed** for focus, caret, pending files, expanded details, filters and incremental rendering.
+- Capture and playback layouts were inspected at 900 × 650, 1280 × 800 and 1600 × 1000; settings at compact and normal sizes. The checked views had no horizontal overflow and no nested vertical scroll surfaces. Shared playback advanced the radar frame; the simulator position preview updated from live frames.
+- The final standalone bundle passed its isolated launch, capture, review, reserved holdout, CPU training, collection authoring, permanent deletion and worker shutdown checks. Native gesture and audio-exception-boundary fixtures passed. The app compiled and its ad-hoc signature verified; the existing SwiftUI `onChange` deprecation warning remains.
+- Installed **0.7.3 / build 15**, confirmed bundled frontend files matched the final source, and exercised native launch and clean quit. All **34 existing recording files** retained their names and checksums.
+
+This is software verification. Physical radar, real microphone capture/synchronization, permission-enabled global shortcuts and DCA acquisition were not revalidated in this pass. Browser quit-preflight tests cover pending review saves; the native app check covers an idle launch/quit, not a real-recording edit. No user recordings, reference media or trained artifacts were published.

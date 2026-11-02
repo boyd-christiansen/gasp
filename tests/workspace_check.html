@@ -3,7 +3,7 @@
 <style>
 body{margin:0;background:#ddd;font:12px system-ui;color:#222}header{height:44px;display:flex;align-items:center;gap:12px;padding:0 16px}button,select{font:inherit;padding:5px 10px}iframe{display:block;background:white;border:0;margin:0 auto}#testRoot{position:fixed;top:50px;left:10px;padding:10px;background:white;z-index:5}#testRoot:empty{display:none}
 </style>
-<header><strong>SIMULATOR · UI checks</strong><select id="size" aria-label="Window size"><option value="900,650">900 × 650</option><option value="1280,800">1280 × 800</option><option value="1600,1000">1600 × 1000</option></select><button id="verify">Verify update continuity</button><button id="layout">Check layout</button><output id="result" role="status"></output></header>
+<header><strong>SIMULATOR · UI checks</strong><select id="size" aria-label="Window size"><option value="900,650">900 × 650</option><option value="1280,800">1280 × 800</option><option value="1600,1000">1600 × 1000</option></select><button id="verify">Verify update continuity</button><button id="audit">Audit interactions</button><button id="layout">Check layout</button><output id="result" role="status"></output></header>
 <iframe id="workspace" title="Isolated Gasp workspace" src="/training" width="900" height="650"></iframe><div id="testRoot"></div>
 <script src="/static/workspace-ui.js"></script>
 <script>
@@ -37,4 +37,4 @@ document.getElementById('verify').onclick=()=>{
  }catch(e){out.textContent='FAILED: '+e.message;throw e;}
  finally{root.replaceChildren();}
 };
-</script></html>
+</script><script src="/ui-regression.js"></script></html>

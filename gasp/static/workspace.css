@@ -190,3 +190,7 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
   .record-feedback .particle-face {width: 46px; height: 54px;}
   .take-progress {margin-bottom: 12px;}
 }
+
+/* Failures stay with the controls that produced them, including modal settings. */
+.dialog-notice {position: sticky; top: 0; z-index: 3; padding: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: var(--control-radius); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere;}
+.dialog-notice.error {background: #fff4f3; border-color: #e5c3bf; color: #853a31;}

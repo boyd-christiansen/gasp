@@ -6,6 +6,8 @@ Design review · 2 November 2026 · against Gasp 0.7.0.
 
 ## Direction
 
+The [0.7.3 interaction audit](INTERACTION_AUDIT.md) records the subsequent review of navigation, settings, capture, draft persistence, replay, and training, with a repeatable regression workflow.
+
 Keep the monochrome identity, Capture / Training structure, curated baseline, collection library, and shared recording timeline. Improve hierarchy, continuity, and precision within that structure.
 
 [Benji Taylor's Stageshow](https://benji.org/stageshow) is a useful reference for deliberate composition, selective emphasis, and motion with a visible cause. It makes promotional UI demonstrations. Apply those principles to Gasp's real interactions; keep real data readable and controls accessible. Decorative crops, placeholder content, scripted success, and artificial waiting are inappropriate in the working app.

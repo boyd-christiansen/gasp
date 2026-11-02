@@ -199,6 +199,8 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var gesture = RecordingGesture()
     var recording = false
     var quitting = false
+    var checkingQuit = false
+    var quitCheckID = UUID()
     var startupTimer: Timer?
     var startupChecks = 0
     var hideOverlay: DispatchWorkItem?
@@ -425,12 +427,40 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool { false }
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
         if quitting { return .terminateNow }
+        if checkingQuit { return .terminateLater }
+        checkingQuit = true
+        quitCheckID = UUID()
+        let checkID = quitCheckID
+        web.callAsyncJavaScript("""
+            try {
+                if (window.gaspPrepareToQuit) await window.gaspPrepareToQuit();
+                return '';
+            } catch (error) { return error.message || 'The review could not be saved.'; }
+            """, arguments:[:], in:nil, in:.page) { [weak self] result in
+                guard let self, self.checkingQuit, self.quitCheckID == checkID else { return }
+                switch result {
+                case .success(let value): self.finishQuitCheck(value as? String ?? "")
+                case .failure: self.finishQuitCheck("The workspace did not respond. Your changes have not been confirmed saved. Please try again.")
+                }
+            }
+        DispatchQueue.main.asyncAfter(deadline:.now()+10) { [weak self] in
+            guard let self, self.checkingQuit, self.quitCheckID == checkID else { return }
+            self.finishQuitCheck("Saving is taking longer than expected. Gasp will stay open so your review can finish saving.")
+        }
+        return .terminateLater
+    }
+    private func finishQuitCheck(_ message:String) {
+        checkingQuit = false
+        if !message.isEmpty {
+            showWindow(); fatalAlert(message)
+            NSApp.reply(toApplicationShouldTerminate:false)
+            return
+        }
         quitting = true; startupTimer?.invalidate(); audio.discard(); speech.cancel()
         if let tap = eventTap { CGEvent.tapEnable(tap:tap,enable:false) }
-        guard let process = worker,process.isRunning else { return .terminateNow }
+        guard let process = worker,process.isRunning else { NSApp.reply(toApplicationShouldTerminate:true); return }
         process.interrupt()
         DispatchQueue.global().async { process.waitUntilExit(); DispatchQueue.main.async { NSApp.reply(toApplicationShouldTerminate:true) } }
-        return .terminateLater
     }
     func fatalAlert(_ text:String) { let alert = NSAlert(); alert.messageText = "Gasp needs attention"; alert.informativeText = text; alert.runModal() }
 }
