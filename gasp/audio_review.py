@@ -22,6 +22,10 @@ def is_control(take):
     return take.get("articulation") in {"rest", "negative"}
 
 
+def is_syllable_exercise(take):
+    return take.get('prompt_id') in {'stops', 'plosives', 'nasals', 'fricatives', 'vowels'} or '·' in take.get('prompt_text', '')
+
+
 def processing_window(take):
     """Audio-relative exclusion; never changes the original WAV or radar clock."""
     timing = (take.get('media') or {}).get('native_audio_timing') or {}
@@ -78,7 +82,8 @@ def analyze_audio(path, start_s=0):
     return dict(duration_s=len(x)/rate, sample_rate_hz=int(rate), peak=peak,
                 clipped_fraction=float(np.mean(abs(signal)>=.995)) if len(signal) else 0, active_s=float(active.sum()*.01),
                 audible_s=float(np.sum(envelope > .001)*.01),
-                regions=regions, peaks_s=[p*.01 for p in peaks], peak_strengths=[float(envelope[p]) for p in peaks], envelope=envelope.tolist())
+                regions=regions, peaks_s=[p*.01 for p in peaks], peak_strengths=[float(envelope[p]) for p in peaks],
+                processing_start_s=start_s, envelope=envelope.tolist())
 
 
 def inspect_take(store, sid, tid):
@@ -122,7 +127,7 @@ def inspect_take(store, sid, tid):
     result['audio'] = {k:v for k,v in a.items() if k != 'envelope'}
     if not is_control(take) and take.get('articulation') in {'voiced','whisper'}:
         tokens = speech_tokens(take.get('target_text') or take.get('label',''))
-        phonetic = take.get('prompt_id') in {'plosives','nasals','fricatives','vowels'} or '·' in take.get('prompt_text','')
+        phonetic = is_syllable_exercise(take)
         if a['audible_s'] < .18:
             result['warnings'].append({'code':'quiet_audio','message':'The microphone level is very low. Listen to check that the full prompt is audible; this level check cannot tell whether speech is missing.'})
         elif phonetic and len(a['peaks_s']) < max(2, len(tokens)*.5):
@@ -160,36 +165,53 @@ def propose_words(text, recognized, offset, duration):
     return out
 
 
-def acoustic_words(text, audio, offset, duration):
-    tokens=speech_tokens(text); peaks=audio['peaks_s']
-    groups=[speech_tokens(g) for g in text.split('·')]
-    regions=audio['regions']
-    if len(groups)>1 and len(groups)==len(regions):
-        chosen=[]
-        for group,(a,b) in zip(groups,regions):
-            candidates=[i for i,p in enumerate(peaks) if a<=p<=b]
-            if len(candidates)<len(group):return []
-            indices=sorted(candidates,key=lambda i:audio['peak_strengths'][i],reverse=True)[:len(group)]
-            chosen.extend(peaks[i] for i in sorted(indices))
-        peaks=chosen
-    # Do not fabricate nine syllables when only two were captured.
-    if not tokens or len(peaks)<len(tokens) or len(peaks)>len(tokens)*1.5:
+def acoustic_words(text, audio, offset, duration, group_text=None):
+    """Draft isolated sounds from audible regions, never from a forced count.
+
+    The permissive quality-check gate deliberately includes quiet audio. It is
+    unsuitable for annotation: fan/mic noise then looks like extra syllables.
+    Use a separate noise-relative gate here, leaving the WAV and QC untouched.
+    No recognition is implied; the user must confirm the sounds and their order.
+    """
+    tokens = speech_tokens(text)
+    envelope = np.asarray(audio['envelope'])
+    start = audio.get('processing_start_s', 0)
+    tail = envelope[int(np.ceil(start * 100)):]
+    if not tokens or not len(tail):
         return []
-    if len(peaks)>len(tokens):
-        strongest=np.argsort(audio['peak_strengths'])[-len(tokens):]
-        peaks=sorted(peaks[int(i)] for i in strongest)
-    envelope=np.asarray(audio['envelope']); regions=audio['regions']; bounds=[]
-    for i,p in enumerate(peaks):
-        region=next((r for r in regions if r[0]<=p<=r[1]),None)
-        if not region: return []
-        a,b=region
-        if i and peaks[i-1]>=a:
-            lo,hi=round(peaks[i-1]*100),round(p*100)
-            a=(lo+int(np.argmin(envelope[lo:hi+1])))*.01
-        if i+1<len(peaks) and peaks[i+1]<=b:
-            lo,hi=round(p*100),round(peaks[i+1]*100)
-            b=(lo+int(np.argmin(envelope[lo:hi+1])))*.01
-        a=max(0,a+offset);b=min(duration,b+offset)
-        if b<=a: return []
-        bounds.append(dict(text=tokens[i],start_s=a,end_s=b,source='acoustic_estimate'))
-    return bounds
+    noise = float(np.percentile(tail, 20))
+    threshold = max(.0003, noise * 1.75, float(tail.max()) * .025)
+    active = binary_opening(binary_closing(envelope > threshold, structure=np.ones(5)), structure=np.ones(7))
+    edges = np.diff(np.r_[False, active, False].astype(int))
+    regions = list(zip(np.where(edges == 1)[0], np.where(edges == -1)[0]))
+    groups = [speech_tokens(g) for g in (group_text or text).split('·')]
+    # Keep original grouping after the editor removes separators, but never
+    # apply a recipe to a changed transcript.
+    if [t.casefold() for g in groups for t in g] != [t.casefold() for t in tokens]:
+        groups = []
+    if len(regions) == len(tokens):
+        bounds = regions
+    elif len(groups) > 1 and len(regions) == len(groups) and all(groups):
+        bounds = []
+        for group, (a, b) in zip(groups, regions):
+            peaks, _ = find_peaks(envelope[a:b], distance=18,
+                prominence=max(noise * .6, float(envelope[a:b].max()) * .08), height=threshold)
+            if len(peaks) != len(group):
+                return []
+            peaks = peaks + a
+            cuts = [a] + [int(lo + np.argmin(envelope[lo:hi+1])) for lo, hi in zip(peaks, peaks[1:])] + [b]
+            bounds.extend(zip(cuts, cuts[1:]))
+    else:
+        # Do not discard extra bursts or invent missing sounds to fit the script.
+        return []
+    result = []
+    for i, (a, b) in enumerate(bounds):
+        lo = max(start, a * .01 - .02)
+        hi = min(audio['duration_s'], b * .01 + .02)
+        if i: lo = max(lo, (bounds[i-1][1] + a) * .005)
+        if i+1 < len(bounds): hi = min(hi, (b + bounds[i+1][0]) * .005)
+        lo, hi = max(0, lo + offset), min(duration, hi + offset)
+        if hi <= lo:
+            return []
+        result.append(dict(text=tokens[i], start_s=lo, end_s=hi, source='acoustic_estimate'))
+    return result

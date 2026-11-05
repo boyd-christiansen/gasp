@@ -195,3 +195,8 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 /* Failures stay with the controls that produced them, including modal settings. */
 .dialog-notice {position: sticky; top: 0; z-index: 3; padding: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: var(--control-radius); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere;}
 .dialog-notice.error {background: #fff4f3; border-color: #e5c3bf; color: #853a31;}
+
+.timing-assistance {font-size:11px;color:var(--muted);margin:10px 0 14px;max-width:640px;line-height:1.65;}
+.timing-assistance summary {cursor:pointer;}
+.timing-assistance p {margin:8px 0;}
+.timing-assistance .text-button {font-size:11px;padding-left:0;}

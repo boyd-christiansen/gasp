@@ -49,7 +49,7 @@ act('retryCheckedTake',async()=>{if(!checkedTake)return;const take=checkedTake;a
 act('reviewCheckedTake',()=>checkedTake&&reviewCapturedTake(checkedTake));
 act('continueCheckedTake',()=>{checkedTake=null;stepOverride=null;$('captureCheck').hidden=true;renderPrompt();return baseAfterCapture();});
 renderTranscript=function(){if(controlTake(selected)){$('reviewTranscript').textContent=selected.prompt_text||selected.label;return;}baseRenderTranscript();};
-function setReviewKind(){const control=controlTake(selected);const audioTrack=document.querySelector('[data-channel="audio"]');audioTrack.disabled=!selected.media;audioTrack.closest('label').hidden=!selected.media;channels.audio=!!selected.media&&audioTrack.checked;$('recordingBadge').textContent=`${control?(selected.articulation==='rest'?'Background reference':'Movement reference'):selected.articulation==='silent'?'Silent speech':'Aloud speech'} · ${selected.review_status||'pending'}${selected.synthetic?' · SIMULATOR':''}`;$('timelineNote').textContent=selected.media?'Audio + radar · shared host-clock estimate':'Radar · no reference audio';$('referenceHeading').textContent=control?'ACTION REFERENCE':selected.articulation==='silent'?'SILENT SPEECH REFERENCE':'SPEECH REFERENCE';document.querySelector('.transcript-panel').classList.toggle('control',control);for(const id of ['annotationToolbar','reviewedTextField','speechTools','transcriptEditor'])$(id).hidden=control;document.querySelector('[data-channel="words"]').closest('label').hidden=control;channels.words=!control&&document.querySelector('[data-channel="words"]').checked;$('trimStartLabel').textContent=control?'Action start (s)':'Speech start (s)';$('trimEndLabel').textContent=control?'Action end (s)':'Speech end (s)';$('timelineKeys').textContent=control?'Space play · ← → step':selected.media?'Space play · Drag word edges · Drag the waveform to place a word':'Space play · Drag word edges · [ ] mark boundaries';if(!control&&!selected.media)$('reviewTimingHint').textContent='No reference audio. Confirm the transcript; word timing is optional.';if(control){words=[];$('confirmedText').value='';$('reviewTimingHint').textContent='Review the action and signal. No transcript needed.';}renderTranscript();drawTimeline();}
+function setReviewKind(){$('timingAssistance').hidden=true;$('timingAssistance').open=false;$('suggestWords').disabled=!selected.media||controlTake(selected)||selected.articulation==='silent';const control=controlTake(selected);const audioTrack=document.querySelector('[data-channel="audio"]');audioTrack.disabled=!selected.media;audioTrack.closest('label').hidden=!selected.media;channels.audio=!!selected.media&&audioTrack.checked;$('recordingBadge').textContent=`${control?(selected.articulation==='rest'?'Background reference':'Movement reference'):selected.articulation==='silent'?'Silent speech':'Aloud speech'} · ${selected.review_status||'pending'}${selected.synthetic?' · SIMULATOR':''}`;$('timelineNote').textContent=selected.media?'Audio + radar · shared host-clock estimate':'Radar · no reference audio';$('referenceHeading').textContent=control?'ACTION REFERENCE':selected.articulation==='silent'?'SILENT SPEECH REFERENCE':'SPEECH REFERENCE';document.querySelector('.transcript-panel').classList.toggle('control',control);for(const id of ['annotationToolbar','reviewedTextField','speechTools','transcriptEditor'])$(id).hidden=control;document.querySelector('[data-channel="words"]').closest('label').hidden=control;channels.words=!control&&document.querySelector('[data-channel="words"]').checked;$('trimStartLabel').textContent=control?'Action start (s)':'Speech start (s)';$('trimEndLabel').textContent=control?'Action end (s)':'Speech end (s)';$('timelineKeys').textContent=control?'Space play · ← → step':selected.media?'Space play · Drag word edges · Drag the waveform to place a word':'Space play · Drag word edges · [ ] mark boundaries';if(!control&&!selected.media)$('reviewTimingHint').textContent='No reference audio. Confirm the transcript; word timing is optional.';if(control){words=[];$('confirmedText').value='';$('reviewTimingHint').textContent='Review the action and signal. No transcript needed.';}renderTranscript();drawTimeline();}
 openTake=async function(sid,tid){
   await baseOpenTake(sid,tid);if(selected?.id!==tid||stage!=='replay'||tab!=='capture'||dictation)return;
   words=controlTake(selected)?[]:words.filter(w=>textTokens(w.text).length);wordIndex=-1;wordPlacement=false;transcriptSignature='';setReviewKind();
@@ -71,12 +71,52 @@ openTake=async function(sid,tid){
   // Human-edited or verified annotations are never replaced automatically.
   const cueDraft=!selected.accepted&&words.some(w=>w.source==='acoustic_estimate'&&w.start_s!=null&&w.start_s<cutoff)&&!words.some(w=>w.start_s!=null&&!['acoustic_estimate','speech_estimate'].includes(w.source));
   if(cueDraft){pushUndo();words=words.map(w=>({...w,start_s:null,end_s:null}));changed();renderTranscript();}
-  if(!controlTake(selected)&&selected.articulation!=='silent'&&selected.media&&!words.some(w=>w.start_s!=null)){
-    suggestTiming(true).catch(e=>{if(selected?.id!==tid)return;$('reviewTimingHint').textContent='Automatic timing unavailable: '+e.message+'. Select a word and drag across its sound to place it.';});
+  if(!selected.accepted&&!controlTake(selected)&&selected.articulation!=='silent'&&selected.media&&!words.some(w=>w.start_s!=null)){
+    suggestTiming(true);
   }
 };
-async function suggestTiming(automatic=false){if(!selected?.media||controlTake(selected)||selected.articulation==='silent')return;const run=++alignmentRun,take=selected,reference=$('confirmedText').value,revisionAtStart=JSON.stringify(words);$('suggestWords').disabled=true;$('reviewTimingHint').textContent='Finding word boundaries in the reference audio…';try{let recognized=[],error='';const phonetic=(take.prompt_text||'').includes('·');let response=await api(`sessions/${take.session_id}/trials/${take.id}/suggest-timing`,'POST',{text:reference,audio_offset_s:audioOffset});if(!response.placed&&native){try{const result=await bridge('speechAlign',{sid:take.session_id,tid:take.id});recognized=result.words;if(selected?.id===take.id)selected.asr_raw_text=result.text;}catch(e){error=e.message;}response=await api(`sessions/${take.session_id}/trials/${take.id}/suggest-timing`,'POST',{text:reference,recognized,audio_offset_s:audioOffset});}if(run!==alignmentRun||selected?.id!==take.id||reference!==$('confirmedText').value||revisionAtStart!==JSON.stringify(words))return;if(response.placed){pushUndo();words=response.words;wordIndex=-1;wordPlacement=false;changed();renderTranscript();$('reviewTimingHint').textContent=`${response.placed} of ${words.length} ${phonetic?'sounds':'words'} placed · ${response.message}`;}else{$('reviewTimingHint').textContent=error?`Automatic timing unavailable: ${error}. Select a word, then drag across its sound on the waveform.`:'No reliable word matches. Select a word, then drag across its sound on the waveform. Timing is optional; never label sounds that are missing.';}}finally{if(selected?.id===take.id)$('suggestWords').disabled=!selected.media;}}
+function timingUnavailable(syllables,error=''){
+  $('reviewTimingHint').textContent=syllables
+    ? 'These sounds could not be separated reliably. Listen and confirm the take; individual sound timings are optional.'
+    : 'Word timing is optional. Listen and confirm the transcript, then keep the take.';
+  $('timingAssistance').hidden=false;
+  $('timingAssistanceDetail').textContent=syllables
+    ? 'Gasp uses the recorded sound bursts for syllable exercises, without Siri or Dictation. It leaves uncertain boundaries unplaced. You can select a sound and drag across the waveform to add its timing.'
+    : 'Sentence timing uses optional on-device Apple speech recognition. '+(error?error.replace(/[.。]+$/,'')+'. ':'')+'Your recording is saved. You can keep a verified transcript without word timestamps, or retry after speech recognition is available.';
+}
+async function suggestTiming(automatic=false){
+  if(!selected?.media||controlTake(selected)||selected.articulation==='silent')return;
+  if(automatic&&(selected.accepted||words.some(w=>w.start_s!=null)))return;
+  const run=++alignmentRun,take=selected,reference=$('confirmedText').value,offset=audioOffset,revisionAtStart=JSON.stringify(words);
+  const current=()=>run===alignmentRun&&selected?.id===take.id&&stage==='replay'&&tab==='capture'&&!dictation&&(!automatic||!selected.accepted)&&offset===audioOffset&&reference===$('confirmedText').value&&revisionAtStart===JSON.stringify(words);
+  $('suggestWords').disabled=true;$('retryTiming').disabled=true;$('timingAssistance').hidden=true;
+  $('reviewTimingHint').textContent='Finding draft boundaries in the reference audio…';
+  let syllables=false;
+  try{
+    let error='',recognition=null;
+    const path=`sessions/${take.session_id}/trials/${take.id}/suggest-timing`;
+    let response=await api(path,'POST',{text:reference,audio_offset_s:offset});
+    if(!current())return;
+    syllables=response.kind==='syllables';
+    // Repeated syllables are not dictation. Never hand them to Apple ASR when
+    // the acoustic pass cannot separate them; that can invent ordinary words.
+    if(!response.placed&&response.recognition_allowed&&native){
+      try{recognition=await bridge('speechAlign',{sid:take.session_id,tid:take.id});}catch(e){error=e.message;}
+      if(!current())return;
+      if(recognition)response=await api(path,'POST',{text:reference,recognized:recognition.words,audio_offset_s:offset});
+    }
+    if(!current())return;
+    if(response.placed){
+      pushUndo();words=response.words;wordIndex=-1;wordPlacement=false;
+      if(recognition)selected.asr_raw_text=recognition.text;
+      changed();renderTranscript();updateWordLabel();
+      $('reviewTimingHint').textContent=`${response.placed} of ${words.length} ${syllables?'sounds':'words'} placed · ${response.message}`;
+    }else timingUnavailable(syllables,error);
+  }catch(e){if(current())timingUnavailable(syllables,e.message);}
+  finally{if(run===alignmentRun&&selected?.id===take.id){$('suggestWords').disabled=!selected.media;$('retryTiming').disabled=false;}}
+}
 act('suggestWords',()=>suggestTiming(false));
+act('retryTiming',()=>suggestTiming(false));
 updateWordLabel=function(){const w=words[wordIndex],control=controlTake(selected);for(const id of ['setWordStart','setWordEnd','clearWordTime'])$(id).disabled=!w||control;$('setWordEnd').disabled=!w||w.start_s==null;$('setWordStart').classList.toggle('armed',!!w&&w.start_s!=null&&w.end_s==null);$('setWordStart').textContent=w?.start_s!=null?`[ Start ${w.start_s.toFixed(2)} s`:'[ Mark start';$('setWordEnd').textContent=w?.end_s!=null?`] End ${w.end_s.toFixed(2)} s`:'] Mark end';$('selectedWordLabel').textContent=!w?(selected?.media?'Select a word, then drag across its sound on the waveform.':'Optional timing: select a word, then mark its start and end at the playhead.'):w.start_s==null?(selected?.media?`“${w.text}” selected · drag its start → end on the waveform.`:`“${w.text}” selected · move the playhead, then press [ to mark its start.`):w.end_s==null?`“${w.text}” starts at ${w.start_s.toFixed(2)} s · move to its end, then press ].`:`“${w.text}” · ${w.start_s.toFixed(2)}–${w.end_s.toFixed(2)} s${w.source==='manual'?'':' · suggested'} · drag either edge to adjust.`;};
 function wordLimits(i){return{start:words.slice(0,i).filter(w=>w.end_s!=null).at(-1)?.end_s||0,end:words.slice(i+1).find(w=>w.start_s!=null)?.start_s??replay.duration_s};}
 setEdge=function(edge){if(!replay||!words[wordIndex])return;const w=words[wordIndex],bounds=wordLimits(wordIndex),t=Math.max(bounds.start,Math.min(bounds.end,time));if(edge==='end_s'&&(w.start_s==null||t<=w.start_s))throw new Error('Place the end after the marked start.');if(edge==='start_s'&&t>=bounds.end)throw new Error('Place the start before the next word.');pushUndo();w[edge]=t;if(edge==='start_s'&&w.end_s!=null&&w.end_s<=t)w.end_s=null;w.source='manual';wordPlacement=w.end_s==null;changed();spanSignature='';renderTranscript();updateWordLabel();};

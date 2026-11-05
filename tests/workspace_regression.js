@@ -158,3 +158,45 @@ micCheck.onclick=async()=>{
  }catch(error){out.textContent='FAILED microphone resume: '+error.message;throw error;}
  finally{micCheck.disabled=false;}
 };
+
+const timingCheck=document.createElement('button');timingCheck.textContent='Check timing fallback';document.querySelector('header').append(timingCheck);
+timingCheck.onclick=async()=>{
+ const out=document.getElementById('result'),frame=document.getElementById('workspace');timingCheck.disabled=true;
+ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ const wait=async(fn,message)=>{const until=Date.now()+15000;while(!fn()){if(Date.now()>until)throw Error(message);await sleep(30);}};
+ let passed=0;const assert=(condition,message)=>{if(!condition)throw Error(message);out.textContent=`Passed ${++passed} timing checks: ${message}`;};
+ try{
+  frame.src='/native-preview?timing-check='+Date.now();
+  await new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+  const w=frame.contentWindow,d=w.document,click=s=>d.querySelector(s).click();
+  await wait(()=>!!d.querySelector('#journeyHome [data-collection]'),'Workspace did not load');
+  const takes=await (await w.fetch('/api/recordings')).json();
+  const open=async label=>{
+   const item=takes.find(t=>t.label===label);if(!item)throw Error('Missing fixture '+label);
+   const t=await (await w.fetch(`/api/sessions/${item.session_id}/trials/${item.id}`)).json();
+   if(d.getElementById('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');
+   d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);click(`[data-tid="${t.id}"]`);
+   await wait(()=>d.getElementById('confirmedText').value===t.target_text&&!d.getElementById('replayStage').hidden,'Take did not open');return t;
+  };
+  await open('Synthetic syllables');
+  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('9 of 9 sounds placed'),'No acoustic draft');
+  assert(w.mockSpeechCalls===0,'Syllable drafts never call Apple recognition');
+  assert(d.querySelectorAll('#wordSpans .word-span').length===9,'Draft boundaries appear on the shared timeline');
+  assert(d.getElementById('reviewState').textContent.includes('needs review'),'Drafts remain unverified');
+  await open('Synthetic incomplete syllables');
+  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('could not be separated reliably'),'No ambiguous-audio hint');
+  assert(w.mockSpeechCalls===0&&d.querySelectorAll('#wordSpans .word-span').length===0,'Missing sounds are not fabricated or sent to ASR');
+  assert(!d.getElementById('keepTake').disabled,'Uncertain timing does not block transcript review');
+  const sentence=await open('Synthetic sentence');
+  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('Word timing is optional'),'No speech-service fallback');
+  assert(w.mockSpeechCalls===1,'Sentences can use the optional native recognizer');
+  assert(!d.getElementById('timingAssistance').hidden&&d.getElementById('timingAssistanceDetail').textContent.includes('Siri and Dictation'),'Speech-service details are available without a recording-error banner');
+  click('#keepTake');
+  await wait(()=>d.getElementById('reviewState').textContent==='verified','Untimed transcript could not be verified');
+  const saved=await (await w.fetch(`/api/sessions/${sentence.session_id}/trials/${sentence.id}`)).json();
+  assert(saved.accepted&&saved.confirmed_text===sentence.target_text&&saved.words.every(w=>w.start_s==null),'Whole-utterance training keeps verified text without fabricated timestamps');
+  await open('Synthetic syllables');await open('Synthetic sentence');await sleep(200);
+  assert(w.mockSpeechCalls===1,'Reopening a verified take does not regenerate annotations');
+  out.textContent=`Passed ${passed} timing checks · acoustic drafts, uncertain audio, unavailable ASR, and untimed transcript review`;
+ }catch(e){out.textContent='FAILED timing: '+e.message;throw e;}finally{timingCheck.disabled=false;}
+};

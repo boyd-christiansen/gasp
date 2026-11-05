@@ -153,3 +153,11 @@ The [interaction audit](design/INTERACTION_AUDIT.md) records the failures found 
 - Installed **0.7.3 / build 15**, confirmed bundled frontend files matched the final source, and exercised native launch and clean quit. All **34 existing recording files** retained their names and checksums.
 
 This is software verification. Physical radar, real microphone capture/synchronization, permission-enabled global shortcuts and DCA acquisition were not revalidated in this pass. Browser quit-preflight tests cover pending review saves; the native app check covers an idle launch/quit, not a real-recording edit. No user recordings, reference media or trained artifacts were published.
+
+
+## Syllable timing without Apple recognition · 0.7.6 · 2026-11-05
+
+- **78 Python tests passed**, including noisy syllable regions, missing/extra sounds, grouped acoustic valleys, cue exclusion, and a read-only timing endpoint. Original WAV data and take annotations remain unchanged by analysis.
+- **9 isolated browser checks passed**: syllables never call Apple speech recognition; draft spans appear on the shared timeline; ambiguous audio stays untimed; unavailable recognition does not block verifying a whole transcript; reopening a verified take preserves its annotations.
+- Read-only analysis of four local calibration recordings produced draft boundaries for 9 stops, 9 nasals, 8 fricatives, and 9 vowels. This checks practical coverage, not timestamp accuracy or speech recognition. Drafts still require listening and adjustment. No personal recordings are included in the repository.
+- Sentence timing retains the optional Apple on-device recognizer. If Siri/Dictation or the recognition service is unavailable, utterance transcripts can still be verified and used without word timestamps. No forced-alignment model is bundled.

@@ -524,11 +524,11 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
 
     @app.post("/api/sessions/{sid}/trials/{tid}/suggest-timing")
     def suggest_timing(sid: str, tid: str, body: dict):
-        from .audio_review import analyze_audio, acoustic_words, propose_words, is_control, processing_window
+        from .audio_review import analyze_audio, acoustic_words, propose_words, is_control, is_syllable_exercise, processing_window
         path = store.trial_dir(sid, tid)
         take = json.loads((path/"trial.json").read_text())
         if is_control(take) or take.get("articulation") == "silent":
-            return {"words":[], "message":"This take does not use audio word alignment."}
+            return {"words":[], "placed":0, "recognition_allowed":False, "message":"This take does not use audio word alignment."}
         text = body.get("text") or take.get("confirmed_text") or take.get("target_text") or ""
         if not isinstance(text, str) or len(text) > 20000:
             raise ValueError("Invalid transcript")
@@ -540,14 +540,16 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
             raise ValueError("Invalid recognition result")
         start = processing_window(take)['start_s']
         recognized = [w for w in recognized if float(w.get('start_s', w.get('start', 0))) >= start]
-        words = propose_words(text, recognized, offset, take['duration_s'])
+        syllables = is_syllable_exercise(take)
+        words = propose_words(text, [] if syllables else recognized, offset, take['duration_s'])
         message = "Matched words have draft timing. Unmatched words remain unplaced."
-        if '·' in take.get('prompt_text','') and take.get('media',{}).get('file','').endswith('.wav'):
-            acoustic = acoustic_words(text, analyze_audio(path/take['media']['file'], start), offset, take['duration_s'])
+        if syllables and take.get('media',{}).get('file','').endswith('.wav'):
+            acoustic = acoustic_words(text, analyze_audio(path/take['media']['file'], start), offset, take['duration_s'], take.get('prompt_text'))
             if acoustic:
                 words = acoustic
-                message = "Syllable timing estimated from sound bursts. Listen and adjust the draft boundaries."
-        return {"words":words,"message":message,"placed":sum(w.get('start_s') is not None for w in words)}
+                message = "Draft boundaries from sound bursts. Listen and adjust before keeping."
+        return {"words":words,"message":message,"placed":sum(w.get('start_s') is not None for w in words),
+                "kind":"syllables" if syllables else "speech", "recognition_allowed":not syllables}
 
     @app.get("/api/sessions/{sid}/trials/{tid}/signal")
     def trial_signal(sid: str, tid: str):

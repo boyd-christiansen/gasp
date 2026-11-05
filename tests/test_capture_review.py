@@ -165,3 +165,61 @@ def test_legacy_cue_window_is_explicitly_an_estimate():
     assert processing_window(take)=={'start_s':.7,'source':'legacy_pop_estimate'}
     take['media']['native_audio_timing']['cue_protocol']='short-tone-v1'
     assert processing_window(take)=={'start_s':0,'source':None}
+
+
+def noisy_syllables(rate=16000, centers=None):
+    """Repeatable fan-like noise plus separated syllables, no personal audio."""
+    t=np.arange(rate*7)/rate
+    noise=.006*(.8+.6*np.sin(2*np.pi*3*t)**2)*np.random.default_rng(42).normal(size=len(t))
+    centers=centers if centers is not None else [1.2,1.6,2,3,3.4,3.8,4.8,5.2,5.6]
+    speech=sum(.035*np.sin(2*np.pi*220*t)*np.exp(-((t-c)/.065)**2) for c in centers)
+    return (noise+speech).astype(np.float32)
+
+
+def test_syllable_regions_ignore_background_peaks_without_filling_missing_sounds(tmp_path):
+    path=tmp_path/'noisy.wav';wavfile.write(path,16000,noisy_syllables())
+    a=analyze_audio(path,.7)
+    draft=acoustic_words('pa pa pa ta ta ta ka ka ka',a,.12,7.2)
+    assert len(draft)==9
+    for word,center in zip(draft,[1.2,1.6,2,3,3.4,3.8,4.8,5.2,5.6]):
+        assert word['start_s']<center+.12<word['end_s']
+        assert word['end_s']-word['start_s']<.5
+    for centers in [[],[1.2,1.6],[1.2,1.6,2,3,3.4,3.8,4.8,5.2,5.6,6.2]]:
+        wavfile.write(path,16000,noisy_syllables(centers=centers))
+        assert acoustic_words('pa pa pa ta ta ta ka ka ka',analyze_audio(path,.7),0,7)==[]
+
+
+def test_syllable_endpoint_uses_audio_without_recognition_or_separator_dependency(tmp_path):
+    store=Store(tmp_path);session=store.create_session('sounds','test','serial',bundled_profile('usb-phase-20hz'))
+    text='pa pa pa ta ta ta ka ka ka'
+    take=store.save_trial(session['id'],text,np.arange(141)*50_000_000,np.ones((141,64,12)),np.arange(141),
+        extra=dict(articulation='voiced',prompt_id='stops',prompt_text=text,target_text=text,accepted=False))
+    path=store.trial_dir(session['id'],take['id'])/'reference.wav'
+    wavfile.write(path,16000,noisy_syllables());before=path.read_bytes()
+    store.add_trial_fields(session['id'],take['id'],{'media':{'file':'reference.wav'}})
+    manifest=(path.parent/'trial.json').read_bytes()
+    with TestClient(create_app(tmp_path)) as c:
+        url=f"/api/sessions/{session['id']}/trials/{take['id']}/suggest-timing"
+        result=c.post(url,json={'text':text,'recognized':[{'text':'paw','start':0,'end':.4}]}).json()
+        assert result['placed']==9 and result['kind']=='syllables' and not result['recognition_allowed']
+        assert all(w['source']=='acoustic_estimate' for w in result['words'])
+        assert ' '.join(w['text'] for w in result['words'])==text
+    assert path.read_bytes()==before and (path.parent/'trial.json').read_bytes()==manifest
+
+
+def test_grouped_sounds_use_valleys_and_decline_changed_transcripts():
+    # Three voiced groups with connected, unequal syllables and real valleys.
+    t=np.arange(700)/100
+    e=np.full(700,.002)
+    for start in [1,3,5]:
+        e+=.006*((t>=start)&(t<start+1.3))
+        for center,amplitude in zip([start+.2,start+.6,start+1],[.025,.012,.018]):
+            e+=amplitude*np.exp(-((t-center)/.08)**2)
+    a={'envelope':e.tolist(),'duration_s':7,'processing_start_s':.5}
+    text='ma ma ma na na na me nee moo';recipe='ma ma ma · na na na · me nee moo'
+    words=acoustic_words(text,a,0,7,recipe)
+    assert len(words)==9
+    assert all(a['end_s']<=b['start_s'] for a,b in zip(words,words[1:]))
+    assert 1.2<words[0]['end_s']<1.6 and 1.6<words[1]['end_s']<2
+    assert acoustic_words('ma na me',a,0,7,recipe)  # Three actually separated regions.
+    assert acoustic_words('ma ma na na me me',a,0,7,recipe)==[]  # No stale 3×3 grouping.
