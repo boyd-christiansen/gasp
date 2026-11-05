@@ -37,6 +37,10 @@ PYTHONPATH=. .venv/bin/python tests/preview_learning.py --data test-data/reliabi
 
 Open `/ui-check` and `/failure-preview`. The latter deliberately exercises failure paths and changes only synthetic fixtures. Do not point the preview runner at the installed recordings directory.
 
+## Repository CI finding outside the app changes
+
+[The code-update run](https://github.com/boyd-christiansen/gasp/actions/runs/42016573492) passed its Python tests on Ubuntu and macOS, then failed the historical enclosure manifest check. `enclosure/iwr6843aop/SHA256SUMS_v1_2.txt` still hashes the earlier `vendor/board_geometry.json`; commit `7d0deeb` subsequently added the TP20 and TP20-tail clearance envelopes. The hardware mismatch prevents the later hosted native-build step from running. Local native build and bundle smoke checks passed. This pass preserves that warning and the ongoing CAD work rather than updating a historical geometry checksum without revalidating its exports.
+
 ## Design decisions to carry forward
 
 1. **Recording and detailed annotation are separate tasks.** Capture a coherent block, then listen and confirm its text. Fine word boundaries are optional refinement, not an onboarding requirement.
