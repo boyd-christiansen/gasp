@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 import numpy as np
 import uvicorn
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from gasp.cli import seed_demo
 from gasp.server import create_app
 from gasp.storage import atomic_json
@@ -39,5 +39,16 @@ def ui_check():
 @app.get('/ui-regression.js')
 def ui_regression():
     return FileResponse(Path(__file__).with_name('workspace_regression.js'),media_type='text/javascript')
+
+@app.get('/native-preview')
+def native_preview():
+    # Test-only bridge: no microphone, permission prompt, or native API is used.
+    html=Path('gasp/static/training.html').read_text()
+    return HTMLResponse(html.replace('<script src="/static/training.js">',
+        '<script src="/native-preview-bridge.js"></script><script src="/static/training.js">'))
+
+@app.get('/native-preview-bridge.js')
+def native_bridge():
+    return FileResponse(Path(__file__).with_name('native_preview_bridge.js'),media_type='text/javascript')
 
 uvicorn.run(app,host='127.0.0.1',port=args.port,access_log=False)

@@ -105,6 +105,8 @@ document.getElementById('audit').onclick=async()=>{
   record.focus();record.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));await wait(()=>d.getElementById('recordingState').textContent==='Recording','Reconnected recording did not begin');await sleep(900);record.dispatchEvent(new w.KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true}));
   await wait(()=>d.getElementById('promptText').textContent.includes('pa pa pa'),'Reconnected movement did not finish');
   assert((await request('live')).session.id===sessionId&&(await request('recordings')).length===beforeCapture+3,'Reconnecting resumes the same session before the next take');
+  await home();await wait(()=>d.getElementById('journeyHome').textContent.includes('3 of 12 recorded · 0 reviewed'),'Recorded progress disappeared before review');
+  assert(d.querySelector('.journey-card.current .journey-meter .recorded').style.width==='25%','Baseline bar includes captured prompts before review');
   await home();await training();click('[data-learn="prepare"]');await wait(()=>!!d.getElementById('learnStart'),'Training confirmation missing');click('#learnStart');
   await wait(()=>!!d.getElementById('learningPredictions'),'Local training did not finish');
   assert(d.getElementById('learningWorkspace').textContent.includes('DEVELOPMENT SET'),'Local phrase training reaches a measured development result');
@@ -122,4 +124,37 @@ document.getElementById('audit').onclick=async()=>{
   out.textContent=`Passed ${passed.length} interaction regression checks`;out.dataset.results=JSON.stringify(passed);
  }catch(error){out.textContent=`FAILED after ${passed.length}: ${error.message}`;out.dataset.results=JSON.stringify(passed);throw error;}
  finally{if(release)release();w.fetch=original;button.disabled=false;}
+};
+
+// Reload the real workspace with a test-only native permission bridge.
+const micCheck=document.createElement('button');micCheck.textContent='Check microphone resume';document.querySelector('header').append(micCheck);
+micCheck.onclick=async()=>{
+ const out=document.getElementById('result'),frame=document.getElementById('workspace');micCheck.disabled=true;
+ const request=async(path,method='GET',body)=>{const r=await fetch('/api/'+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw Error(await r.text());return r.json();};
+ const wait=async(fn,message)=>{const end=Date.now()+15000;while(!fn()){if(Date.now()>end)throw Error(message);await new Promise(r=>setTimeout(r,40));}};
+ const assert=(ok,message)=>{if(!ok)throw Error(message);};
+ try{
+  const preferences=await request('preferences');await request('preferences','PUT',{...preferences,reference_audio:true});
+  await request('disconnect','POST');
+  await request('connect','POST',{source:'simulator',profile:'usb-phase-20hz'});
+  const before=await request('recordings');
+  frame.src='/native-preview';await new Promise(resolve=>frame.onload=resolve);
+  const d=frame.contentDocument;
+  await wait(()=>!!d.querySelector('#journeyHome [data-collection]'),'Restored workspace missing');
+  assert(d.getElementById('referenceAudio').checked,'Saved microphone preference was silently turned off on restart');
+  d.querySelector('#journeyHome [data-collection]').click();await wait(()=>!!d.getElementById('startCollection'),'Collection missing');
+  assert(d.getElementById('startCollection').textContent.includes('Resume'),'Saved session was not resumable');
+  d.getElementById('startCollection').click();await wait(()=>!d.getElementById('captureSetup').hidden,'Resume setup missing');
+  assert(d.getElementById('setupAudioStatus').textContent==='Permission needed','Permission state is not explained');
+  assert(!d.getElementById('setupNext').disabled,'Missing permission stranded the Resume button');
+  d.getElementById('setupNext').click();await wait(()=>!d.getElementById('setupError').hidden,'Permission denial was not visible');
+  assert(!d.getElementById('captureSetup').hidden&&!d.getElementById('setupNext').disabled,'Denied permission cannot be retried');
+  assert((await request('preferences')).reference_audio,'Permission denial overwrote saved intent');
+  d.getElementById('setupNext').click();await wait(()=>!d.getElementById('recordStage').hidden&&d.getElementById('inputState').textContent==='Microphone ready','Allowed microphone did not resume recording');
+  assert(d.getElementById('stepCount').textContent.startsWith('3 / 12 captured'),'Resume lost captured progress');
+  assert(d.getElementById('promptText').textContent.startsWith('pa pa pa'),'Resume did not select the next unrecorded prompt');
+  assert((await request('recordings')).length===before.length,'Resuming created unintended takes');
+  out.textContent='Passed: restart retains 3 captures and microphone preference; permission denial, retry, readiness, and next prompt verified (mock native bridge).';
+ }catch(error){out.textContent='FAILED microphone resume: '+error.message;throw error;}
+ finally{micCheck.disabled=false;}
 };

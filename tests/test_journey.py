@@ -100,3 +100,37 @@ def test_pose_distance_and_raw_passage_boundaries():
     raw=custom_plan({'template':'reader','content':'word '*150},raw=True)
     assert len(raw['steps'])==10
     assert all(s['duration_s']<=25 and len(s['prompt_text'].split())<=35 for s in raw['steps'])
+
+
+def test_pending_capture_progress_survives_restart_without_unlocking_review_gate(tmp_path):
+    app=create_app(tmp_path)
+    with TestClient(app) as c:
+        c.post('/api/connect',json={'source':'simulator'})
+        session=start(c,'calibration').json();sid=session['id'];profile=session['profile']['sha256']
+        steps=session['collection']['plan']['steps'];store=app.state.store;ids=[]
+        for step in steps[:7]:
+            _,extra=store.collection_record(sid,step['step_id'])
+            take=store.save_trial(sid,step['target_text'],np.arange(11)*1_000_000_000,
+                np.ones((11,16,12),dtype=np.complex64),np.arange(11),extra={**extra,'articulation':step['articulation']})
+            ids.append(take['id'])
+        c.patch(f'/api/sessions/{sid}/trials/{ids[-1]}',json={'accepted':False,'base_revision':0})
+        # An older repeat of an already recorded prompt must not inflate progress.
+        another=start(c,'calibration').json()
+        _,extra=store.collection_record(another['id'],steps[0]['step_id'])
+        store.save_trial(another['id'],'rest',np.arange(11)*1_000_000_000,
+            np.ones((11,16,12)),np.arange(11),extra={**extra,'articulation':'rest'})
+        p=progress(c)['steps'];assert p[0]['recorded']==6 and p[0]['verified']==0
+        assert not p[0]['complete'] and not p[1]['unlocked']
+        c.put('/api/preferences',json={'setup':{'subject':'Boyd'},'reference_audio':True})
+    with TestClient(create_app(tmp_path)) as c:
+        p=progress(c,profile=profile)['steps'];assert p[0]['recorded']==6 and p[0]['verified']==0
+        assert not progress(c,subject='Someone else',profile=profile)['steps'][0]['recorded']
+        assert not progress(c,source='serial',profile=profile)['steps'][0]['recorded']
+        assert not progress(c,profile='another profile')['steps'][0]['recorded']
+        assert c.get('/api/preferences').json()['reference_audio'] is True
+        block=next(b for b in c.get('/api/blocks').json() if b['id']==sid)
+        assert block['completed_steps']==6 and block['verified_steps']==0
+        kept=c.patch(f'/api/sessions/{sid}/trials/{ids[0]}',json={'accepted':True,'confirmed_text':'','base_revision':0})
+        assert kept.status_code==200,kept.text
+        p=progress(c,profile=profile)['steps'][0]
+        assert p['recorded']==6 and p['verified']==1 and not p['complete']

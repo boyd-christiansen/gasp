@@ -156,11 +156,13 @@ def register_journey(app, store, engine):
         for b in BASELINE:
             matching = [s for s in records if s["collection"].get("type_id") == b["id"]]
             expected = {s["step_id"]: s for s in baseline_plan(b["id"])["steps"]}
-            verified = set()
+            recorded, verified = set(), set()
             norm = lambda value: re.sub(r"[^\w]+", " ", value.casefold()).strip()
             for session in matching:
                 for t in store.trials(session["id"]):
                     step = expected.get(t.get("plan_step_id"))
+                    if step and t.get("review_status") != "rejected":
+                        recorded.add(t["plan_step_id"])
                     if not step or not t.get("accepted") or t.get("review_status") != "verified":
                         continue
                     if step["articulation"] not in {"rest", "negative"} and norm(t.get("confirmed_text") or "") != norm(step["target_text"]):
@@ -169,7 +171,7 @@ def register_journey(app, store, engine):
                         continue
                     verified.add(t["plan_step_id"])
             complete = len(verified) == b["total"]
-            result.append(dict(id=b["id"], verified=len(verified), total=b["total"], complete=complete,
+            result.append(dict(id=b["id"], recorded=len(recorded), verified=len(verified), total=b["total"], complete=complete,
                                unlocked=preceding, sessions=[s["id"] for s in matching]))
             preceding = preceding and complete
         return dict(cohort_id=key, steps=result, complete=preceding, synthetic=source == "simulator")

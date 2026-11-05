@@ -15,6 +15,10 @@ Gasp collects and reviews personal radar training data. The installed Mac app bu
 5. For words/phrases, **hold Space or the record button**, wait for Recording/the readiness sound, perform the prompt, then release. For movements, hold Space and release when finished; the timer counts up. For stillness/background samples, press Space once: a three-second preparation countdown precedes the timed capture, which stops automatically. Reader uses Space to start and finish a passage. Cancel or Escape cancels the take.
 6. Saved takes remain **pending review**. Immediate capture checks pause on problems so you can retry before continuing. Open a take in the library, confirm the actual words, preserve fillers/repetitions, and choose **Verify & keep**. Actions are reviewed without transcripts or word annotations. Reject uncertain or corrupted takes; a rejected prompt becomes available again.
 
+The baseline card distinguishes **recorded** prompts from **reviewed** prompts. Gray progress includes pending recordings; black progress indicates verified recordings. Repeated takes do not count twice, and rejected takes do not advance capture progress. Resuming returns to the next unrecorded prompt; completing review unlocks the next baseline collection.
+
+The microphone preference survives restarts and updates independently of macOS permission. If access needs to be granted again, **Resume recording** requests it and explains any denial without resetting your preference or creating another session.
+
 The optional global shortcut uses a double tap of Right Option (Right Control or Fn/Globe are alternatives) to begin and one tap to finish. Enable it in Settings and grant Input Monitoring if desired. Buttons and Space work without that permission. Modifier-plus-typing does not count as a tap.
 
 The recorder shows status and timing in the main window. The floating recording indicator appears only while Gasp is in the background or minimized, and disappears when you return.
