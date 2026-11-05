@@ -50,7 +50,7 @@ act('retryCheckedTake',async()=>{if(!checkedTake)return;const take=checkedTake;a
 act('reviewCheckedTake',()=>checkedTake&&reviewCapturedTake(checkedTake));
 act('continueCheckedTake',()=>{checkedTake=null;stepOverride=null;$('captureCheck').hidden=true;renderPrompt();return baseAfterCapture();});
 renderTranscript=function(){if(controlTake(selected)){$('reviewTranscript').textContent=selected.prompt_text||selected.label;return;}baseRenderTranscript();};
-function setReviewKind(){resetAudioLoop();$('retryTiming').hidden=true;$('timingAssistance').hidden=true;$('timingAssistance').open=false;$('suggestWords').disabled=!selected.media||controlTake(selected)||selected.articulation==='silent';const control=controlTake(selected);$('retryTiming').hidden=!selected.media||control||selected.articulation==='silent';const audioTrack=document.querySelector('[data-channel="audio"]');audioTrack.disabled=!selected.media;audioTrack.closest('label').hidden=!selected.media;channels.audio=!!selected.media&&audioTrack.checked;$('recordingBadge').textContent=`${control?(selected.articulation==='rest'?'Background reference':'Movement reference'):selected.articulation==='silent'?'Silent speech':'Aloud speech'} · ${selected.review_status||'pending'}${selected.synthetic?' · SIMULATOR':''}`;$('timelineNote').textContent=selected.media?'Audio + radar · shared host-clock estimate':'Radar · no reference audio';$('referenceHeading').textContent=control?'ACTION REFERENCE':selected.articulation==='silent'?'SILENT SPEECH REFERENCE':'SPEECH REFERENCE';document.querySelector('.transcript-panel').classList.toggle('control',control);for(const id of ['annotationToolbar','reviewedTextField','speechTools','transcriptEditor'])$(id).hidden=control;document.querySelector('[data-channel="words"]').closest('label').hidden=control;channels.words=!control&&document.querySelector('[data-channel="words"]').checked;$('trimStartLabel').textContent=control?'Action start (s)':'Speech start (s)';$('trimEndLabel').textContent=control?'Action end (s)':'Speech end (s)';$('timelineKeys').textContent=control?'Space play · ← → step':selected.media?'Space play · Drag words to move · Drag edges to trim · Double-click a word to seek':'Space play · Drag word edges · [ ] mark boundaries';if(!control&&!selected.media)$('reviewTimingHint').textContent='No reference audio. Confirm the transcript; word timing is optional.';if(control){words=[];$('confirmedText').value='';$('reviewTimingHint').textContent='Review the action and signal. No transcript needed.';}renderTranscript();drawTimeline();}
+function setReviewKind(){alignmentPending=false;resetAudioLoop();$('retryTiming').hidden=true;$('timingAssistance').hidden=true;$('timingAssistance').open=false;$('suggestWords').disabled=!selected.media||controlTake(selected)||selected.articulation==='silent';const control=controlTake(selected);$('retryTiming').hidden=!selected.media||control||selected.articulation==='silent';const audioTrack=document.querySelector('[data-channel="audio"]');audioTrack.disabled=!selected.media;audioTrack.closest('label').hidden=!selected.media;channels.audio=!!selected.media&&audioTrack.checked;$('recordingBadge').textContent=`${control?(selected.articulation==='rest'?'Background reference':'Movement reference'):selected.articulation==='silent'?'Silent speech':'Aloud speech'} · ${selected.review_status||'pending'}${selected.synthetic?' · SIMULATOR':''}`;$('timelineNote').textContent=selected.media?'Audio + radar · shared host-clock estimate':'Radar · no reference audio';$('referenceHeading').textContent=control?'ACTION REFERENCE':selected.articulation==='silent'?'SILENT SPEECH REFERENCE':'SPEECH REFERENCE';document.querySelector('.transcript-panel').classList.toggle('control',control);for(const id of ['annotationToolbar','reviewedTextField','speechTools','transcriptEditor'])$(id).hidden=control;document.querySelector('[data-channel="words"]').closest('label').hidden=control;channels.words=!control&&document.querySelector('[data-channel="words"]').checked;$('trimStartLabel').textContent=control?'Action start (s)':'Speech start (s)';$('trimEndLabel').textContent=control?'Action end (s)':'Speech end (s)';$('timelineKeys').textContent=control?'Space play · ← → step':selected.media?'Space play · Drag words to move · Drag edges to trim · Double-click a word to seek':'Space play · Drag word edges · [ ] mark boundaries';if(!control&&!selected.media)$('reviewTimingHint').textContent='No reference audio. Confirm the transcript; word timing is optional.';if(control){words=[];$('confirmedText').value='';$('reviewTimingHint').textContent='Review the action and signal. No transcript needed.';}renderTranscript();drawTimeline();timingAction();}
 openTake=async function(sid,tid){
   await baseOpenTake(sid,tid);if(selected?.id!==tid||stage!=='replay'||tab!=='capture'||dictation)return;
   words=controlTake(selected)?[]:words.filter(w=>textTokens(w.text).length);wordIndex=-1;wordPlacement=false;transcriptSignature='';setReviewKind();
@@ -72,50 +72,48 @@ openTake=async function(sid,tid){
   // Human-edited or verified annotations are never replaced automatically.
   const cueDraft=!selected.accepted&&words.some(w=>w.source==='acoustic_estimate'&&w.start_s!=null&&w.start_s<cutoff)&&!words.some(w=>w.start_s!=null&&!['acoustic_estimate','speech_estimate'].includes(w.source));
   if(cueDraft){pushUndo();words=words.map(w=>({...w,start_s:null,end_s:null}));changed();renderTranscript();}
-  if(!selected.accepted&&!controlTake(selected)&&selected.articulation!=='silent'&&selected.media&&!words.some(w=>w.start_s!=null)){
+  if(!selected.accepted&&!controlTake(selected)&&selected.articulation!=='silent'&&selected.media&&words.some(w=>w.start_s==null||w.end_s==null)){
     suggestTiming(true);
   }
 };
+let alignmentPending=false;
+function timingAction(){
+  const missing=words.some(w=>w.start_s==null||w.end_s==null),allowed=!!selected?.media&&!controlTake(selected)&&selected.articulation!=='silent';
+  $('retryTiming').hidden=!allowed||(!missing&&!alignmentPending);
+  $('retryTiming').disabled=alignmentPending;
+  $('retryTiming').setAttribute('aria-busy',String(alignmentPending));
+  $('retryTiming').textContent=alignmentPending?'Placing words…':'Auto-place missing words';
+  $('suggestWords').disabled=!allowed||alignmentPending||!missing;
+}
 function timingUnavailable(syllables,error=''){
   $('reviewTimingHint').textContent=syllables
     ? 'These sounds could not be separated reliably. Listen and confirm the take; individual sound timings are optional.'
-    : 'Automatic sentence timing is unavailable. Word timing is optional; you can still verify this transcript.';
-  $('timingAssistance').hidden=false;$('retryTiming').hidden=syllables;
+    : error||'Words could not be placed. Check the reference audio and transcript, then retry.';
+  $('timingAssistance').hidden=false;
   $('timingAssistanceDetail').textContent=syllables
-    ? 'Gasp uses the recorded sound bursts for syllable exercises, without Siri or Dictation. It leaves uncertain boundaries unplaced. You can select a sound and drag across the waveform to add its timing.'
-    : 'Sentence timing uses optional on-device Apple speech recognition. '+(error?error.replace(/[.。]+$/,'')+'. ':'')+'Your recording is saved. You can keep a verified transcript without word timestamps, or retry after speech recognition is available.';
+    ? 'Gasp uses recorded sound bursts for syllable exercises. It leaves uncertain boundaries unplaced. Select a sound and drag across the waveform to add its timing.'
+    : 'Gasp aligns the supplied English transcript to the recorded audio locally. It excludes the start cue and preserves your edits. No Siri or Dictation permission is needed. Suggestions remain drafts until you review them.';
 }
-let unavailableSpeech='';
 async function suggestTiming(automatic=false){
   if(!selected?.media||controlTake(selected)||selected.articulation==='silent')return;
-  if(automatic&&(selected.accepted||words.some(w=>w.start_s!=null)))return;
+  if(automatic&&(selected.accepted||!words.some(w=>w.start_s==null||w.end_s==null)))return;
   const run=++alignmentRun,take=selected,reference=$('confirmedText').value,offset=audioOffset,revisionAtStart=JSON.stringify(words);
   const current=()=>run===alignmentRun&&selected?.id===take.id&&stage==='replay'&&tab==='capture'&&!dictation&&(!automatic||!selected.accepted)&&offset===audioOffset&&reference===$('confirmedText').value&&revisionAtStart===JSON.stringify(words);
-  $('suggestWords').disabled=true;$('retryTiming').disabled=true;$('timingAssistance').hidden=true;
-  $('reviewTimingHint').textContent='Finding draft boundaries in the reference audio…';
+  alignmentPending=true;timingAction();$('timingAssistance').hidden=true;
+  $('reviewTimingHint').textContent='Placing words from the reference audio…';
   let syllables=false;
   try{
-    let error='',recognition=null;
-    const path=`sessions/${take.session_id}/trials/${take.id}/suggest-timing`;
-    let response=await api(path,'POST',{text:reference,audio_offset_s:offset});
+    const response=await api(`sessions/${take.session_id}/trials/${take.id}/suggest-timing`,'POST',{text:reference,audio_offset_s:offset});
     if(!current())return;
     syllables=response.kind==='syllables';
-    // Repeated syllables are not dictation. Never hand them to Apple ASR when
-    // the acoustic pass cannot separate them; that can invent ordinary words.
-    if(!response.placed&&response.recognition_allowed&&native){
-      try{if(automatic&&unavailableSpeech)throw new Error(unavailableSpeech);recognition=await bridge('speechAlign',{sid:take.session_id,tid:take.id});unavailableSpeech='';}catch(e){error=e.message;if(/disabled|denied|not authorized|not available|not supported/i.test(error))unavailableSpeech=error;}
-      if(!current())return;
-      if(recognition)response=await api(path,'POST',{text:reference,recognized:recognition.words,audio_offset_s:offset});
-    }
-    if(!current())return;
     if(response.placed){
       pushUndo();words=mergeTimingSuggestions(words,response.words);wordIndex=-1;wordPlacement=false;
-      if(recognition)selected.asr_raw_text=recognition.text;
       changed();renderTranscript();updateWordLabel();
-      $('reviewTimingHint').textContent=`${words.filter(w=>w.start_s!=null&&w.end_s!=null).length} of ${words.length} ${syllables?'sounds':'words'} placed · ${response.message}`;
-    }else timingUnavailable(syllables,error);
+      const placed=words.filter(w=>w.start_s!=null&&w.end_s!=null).length;
+      $('reviewTimingHint').textContent=`${placed} of ${words.length} ${syllables?'sounds':'words'} placed · ${response.message}`+(placed<words.length?' Some suggestions conflict with existing boundaries; those words were left unchanged.':'');
+    }else timingUnavailable(syllables,response.message);
   }catch(e){if(current())timingUnavailable(syllables,e.message);}
-  finally{if(run===alignmentRun&&selected?.id===take.id){$('suggestWords').disabled=!selected.media;$('retryTiming').disabled=false;}}
+  finally{if(run===alignmentRun){alignmentPending=false;timingAction();if(selected?.id===take.id&&stage==='replay'&&$('reviewTimingHint').textContent==='Placing words from the reference audio…')$('reviewTimingHint').textContent='Your edits are preserved. Auto-place can fill any remaining words.';}}
 }
 // Retrying fills only empty intervals; human edits and existing drafts survive.
 function mergeTimingSuggestions(existing,suggested){
@@ -130,7 +128,7 @@ function mergeTimingSuggestions(existing,suggested){
 }
 act('suggestWords',()=>suggestTiming(false));
 act('retryTiming',()=>suggestTiming(false));
-updateWordLabel=function(){const w=words[wordIndex],control=controlTake(selected);for(const id of ['setWordStart','setWordEnd','clearWordTime'])$(id).disabled=!w||control;$('setWordEnd').disabled=!w||w.start_s==null;$('setWordStart').classList.toggle('armed',!!w&&w.start_s!=null&&w.end_s==null);$('setWordStart').textContent=w?.start_s!=null?`[ Start ${w.start_s.toFixed(2)} s`:'[ Mark start';$('setWordEnd').textContent=w?.end_s!=null?`] End ${w.end_s.toFixed(2)} s`:'] Mark end';$('selectedWordLabel').textContent=!w?(selected?.media?'Drag a word into Audio or Words, or select it and draw its span.':'Optional timing: select a word, then mark its start and end at the playhead.'):w.start_s==null?(selected?.media?`“${w.text}” selected · drag its span in Audio or Words, or drag this word into the timeline.`:`“${w.text}” selected · move the playhead, then press [ to mark its start.`):w.end_s==null?`“${w.text}” starts at ${w.start_s.toFixed(2)} s · move to its end, then press ].`:`“${w.text}” · ${w.start_s.toFixed(2)}–${w.end_s.toFixed(2)} s${w.source==='manual'?'':' · suggested'} · drag to move · drag edges to trim.`;};
+updateWordLabel=function(){const w=words[wordIndex],control=controlTake(selected);for(const id of ['setWordStart','setWordEnd','clearWordTime'])$(id).disabled=!w||control;$('setWordEnd').disabled=!w||w.start_s==null;$('setWordStart').classList.toggle('armed',!!w&&w.start_s!=null&&w.end_s==null);$('setWordStart').textContent=w?.start_s!=null?`[ Start ${w.start_s.toFixed(2)} s`:'[ Mark start';$('setWordEnd').textContent=w?.end_s!=null?`] End ${w.end_s.toFixed(2)} s`:'] Mark end';$('selectedWordLabel').textContent=!w?(selected?.media?'Drag a word into Audio or Words, or select it and draw its span.':'Optional timing: select a word, then mark its start and end at the playhead.'):w.start_s==null?(selected?.media?`“${w.text}” selected · drag its span in Audio or Words, or drag this word into the timeline.`:`“${w.text}” selected · move the playhead, then press [ to mark its start.`):w.end_s==null?`“${w.text}” starts at ${w.start_s.toFixed(2)} s · move to its end, then press ].`:`“${w.text}” · ${w.start_s.toFixed(2)}–${w.end_s.toFixed(2)} s${w.source==='manual'?'':' · suggested'} · drag to move · drag edges to trim.`;timingAction();};
 function wordLimits(i,items=words){return{start:items.slice(0,i).map(w=>w.end_s??w.start_s).filter(t=>t!=null).at(-1)??0,end:items.slice(i+1).map(w=>w.start_s??w.end_s).find(t=>t!=null)??replay.duration_s};}
 const baseTranscriptChanged=transcriptChanged;
 transcriptChanged=function(){if(controlTake(selected)){words=[];$('confirmedText').value='';return;}baseTranscriptChanged();words=words.filter(w=>textTokens(w.text).length);};

@@ -189,16 +189,16 @@ timingCheck.onclick=async()=>{
   assert(w.mockSpeechCalls===0&&d.querySelectorAll('#wordSpans .word-span').length===0,'Missing sounds are not fabricated or sent to ASR');
   assert(!d.getElementById('keepTake').disabled,'Uncertain timing does not block transcript review');
   const sentence=await open('Synthetic sentence');
-  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('Automatic sentence timing is unavailable'),'No speech-service fallback');
-  assert(w.mockSpeechCalls===1,'Sentences can use the optional native recognizer');
-  assert(!d.getElementById('timingAssistance').hidden&&d.getElementById('timingAssistanceDetail').textContent.includes('Siri and Dictation'),'Speech-service details are available without a recording-error banner');
+  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('does not match enough'),'No mismatch explanation');
+  assert(w.mockSpeechCalls===0,'Sentence timing never invokes Apple recognition');
+  assert(!d.getElementById('timingAssistance').hidden&&d.getElementById('timingAssistanceDetail').textContent.includes('locally'),'Alignment details are available without a recording-error banner');
   click('#keepTake');
   await wait(()=>d.getElementById('reviewState').textContent==='verified','Untimed transcript could not be verified');
   const saved=await (await w.fetch(`/api/sessions/${sentence.session_id}/trials/${sentence.id}`)).json();
   assert(saved.accepted&&saved.confirmed_text===sentence.target_text&&saved.words.every(w=>w.start_s==null),'Whole-utterance training keeps verified text without fabricated timestamps');
   await open('Synthetic syllables');await open('Synthetic sentence');await sleep(200);
-  assert(w.mockSpeechCalls===1,'Reopening a verified take does not regenerate annotations');
-  out.textContent=`Passed ${passed} timing checks · acoustic drafts, uncertain audio, unavailable ASR, and untimed transcript review`;
+  assert(w.mockSpeechCalls===0,'Reopening a verified take does not invoke recognition');
+  out.textContent=`Passed ${passed} timing checks · acoustic drafts, mismatched audio, offline alignment, and transcript review`;
  }catch(e){out.textContent='FAILED timing: '+e.message;throw e;}finally{timingCheck.disabled=false;}
 };
 
@@ -242,7 +242,7 @@ timelineCheck.onclick=async()=>{
   const activeStyle=w.getComputedStyle(d.querySelector('[data-transcript="0"]'));
   const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
   const fg=luminance(activeStyle.color),bg=luminance(activeStyle.backgroundColor);
-  assert((Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05)>=4.5,'A selected word remains readable while the playhead is inside it');w.setTime(anchor);
+  assert((Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05)>=4.5,`A selected word remains readable while the playhead is inside it (${activeStyle.color} on ${activeStyle.backgroundColor}; transition ${activeStyle.transition})`);w.setTime(anchor);
   await sleep(1);const body=d.querySelector('[data-word="0"]');drag(body,1.2,1.5);assert(Math.abs(start(0)-1.3)<.01&&Math.abs(end(0)-1.8)<.01,'Drag a whole word without changing duration');assert(time()===anchor,'Moving a word preserves the playhead');
   assert(capturedBy===body,'Word pointer capture preserves the word as the click target');
   drag(d.querySelector('[data-edge="end_s"][data-index="0"]'),1.8,2);assert(Math.abs(end(0)-2)<.01&&time()===anchor,'Trimming preserves the playhead');

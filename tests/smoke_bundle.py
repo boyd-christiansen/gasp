@@ -130,6 +130,23 @@ def main():
                 assert not (root/'data/sessions'/visits[0]).exists()
                 assert len(api('blocks')) == 1 and len(api('recordings')) == 4
                 assert any(m['id'] == report['id'] for m in api('models'))
+                # Load and execute the bundled acoustic model, outside the checkout.
+                # A tone is deliberately not speech: the expected result is a
+                # mismatch, not missing dependencies/model or fabricated words.
+                import math
+                import struct
+                import wave
+                folder = root/'data/sessions'/session['id']/'trials'/trial['id']
+                with wave.open(str(folder/'reference.wav'), 'wb') as wav:
+                    wav.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+                    wav.writeframes(b''.join(struct.pack('<h', int(3000*math.sin(2*math.pi*220*i/16000))) for i in range(16000)))
+                trial_file = folder/'trial.json'
+                metadata = json.loads(trial_file.read_text())
+                metadata.update(articulation='voiced', prompt_id='sentence1', media={'file':'reference.wav'})
+                trial_file.write_text(json.dumps(metadata))
+                timing = api(f"sessions/{session['id']}/trials/{trial['id']}/suggest-timing", 'POST', {'text':'Please open the window.'})
+                assert timing['placed'] == 0 and 'does not match enough' in timing['message'], timing
+                print('Bundled local alignment: CPU inference runs; non-speech is rejected without fabricated words')
                 api('disconnect','POST')
                 api('connect','POST',{'source':'simulator'})
                 parent.terminate(); parent.wait(timeout=5)

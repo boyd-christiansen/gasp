@@ -1,0 +1,14 @@
+Gasp local English word alignment
+
+Acoustic model: facebook/wav2vec2-base-960h (Meta / Facebook AI)
+https://huggingface.co/facebook/wav2vec2-base-960h
+License: Apache License 2.0 (included alongside this notice)
+
+ONNX conversion: onnx-community/wav2vec2-base-960h-ONNX
+Revision: 729c1a6730fb549c20a1c73a3d3f96f11020225e
+https://huggingface.co/onnx-community/wav2vec2-base-960h-ONNX
+Gasp distributes the uint8 ONNX model and its character vocabulary unchanged.
+See gasp/alignment_model.json for exact artifact sizes and SHA-256 hashes.
+
+The model supplies acoustic character probabilities. Gasp's own CTC alignment
+code aligns an existing transcript; draft intervals do not verify its accuracy.

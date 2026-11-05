@@ -7,12 +7,14 @@ export CLANG_MODULE_CACHE_PATH="$PWD/.cache/clang"
 export SWIFT_MODULECACHE_PATH="$PWD/.cache/swift"
 mkdir -p .cache/swift .cache/clang build/macos dist
 .venv/bin/python scripts/write-build-info.py
+.venv/bin/python scripts/fetch-alignment-model.py
 .venv/bin/python -m PyInstaller --noconfirm --clean --onedir --name gasp-capture \
   --distpath build/macos/worker --workpath build/macos/pyinstaller --specpath build/macos \
   --paths "$PWD" --collect-data gasp --hidden-import uvicorn.logging \
   --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto \
   --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on \
   --exclude-module pytest --exclude-module tkinter --exclude-module torch macos/backend.py
+.venv/bin/python scripts/fetch-alignment-model.py build/macos/worker/gasp-capture/_internal/gasp/models/alignment-en
 app="$PWD/dist/Gasp.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp macos/Info.plist "$app/Contents/Info.plist"

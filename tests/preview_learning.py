@@ -75,4 +75,13 @@ def failure_preview():
 def failure_regression():
     return FileResponse(Path(__file__).with_name('failure_regression.js'),media_type='text/javascript')
 
+@app.get('/alignment-preview')
+def alignment_preview():
+    html=Path('gasp/static/training.html').read_text()
+    return HTMLResponse(html.replace('</body>', '<script src="/alignment-regression.js"></script></body>'))
+
+@app.get('/alignment-regression.js')
+def alignment_regression():
+    return FileResponse(Path(__file__).with_name('alignment_regression.js'),media_type='text/javascript')
+
 uvicorn.run(app,host='127.0.0.1',port=args.port,access_log=False)

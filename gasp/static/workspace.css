@@ -204,7 +204,7 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 .timing-assistance .text-button {font-size:11px;padding-left:0;}
 
 /* Preserve click targets and keep editing independent of the playhead. */
-#reviewTranscript button {touch-action:none;cursor:grab;}
+#reviewTranscript button {touch-action:none;cursor:grab;transition:box-shadow .15s;}
 .word-span .word-body {cursor:grab;touch-action:none;}
 .word-span .word-body:active,#reviewTranscript button:active {cursor:grabbing;}
 #wordDraft {pointer-events:none;overflow:hidden;white-space:nowrap;font-size:11px;padding:4px 6px;box-sizing:border-box;}
@@ -213,6 +213,8 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 .audio-loop-tools button[aria-pressed=true] {background:var(--ink);color:#fff;border-color:var(--ink);}
 #loopRegion {position:absolute;top:0;bottom:0;background:#1717170a;border-inline:1px solid #777;pointer-events:none;}
 #loopRegion::before {content:'Loop';position:absolute;top:2px;left:3px;font-size:9px;color:#666;}
-.timing-retry {font-size:11px;padding-left:0;margin-top:0;}
+.timing-retry {font-size:12px;min-height:36px;padding:8px 12px;margin-top:0;border:1px solid var(--line);border-radius:var(--control-radius);background:var(--surface,#fff);}
+.timing-retry:hover:not(:disabled) {background:var(--soft);border-color:var(--muted);}
+.timing-retry[aria-busy=true] {cursor:progress;}
 
 .connection-light.detected {background:#a87926;}

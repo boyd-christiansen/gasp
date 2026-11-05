@@ -543,13 +543,24 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
         syllables = is_syllable_exercise(take)
         words = propose_words(text, [] if syllables else recognized, offset, take['duration_s'])
         message = "Matched words have draft timing. Unmatched words remain unplaced."
+        if not syllables and not recognized:
+            from .word_alignment import align_reference, AlignmentError
+            media = take.get('media') or {}
+            if media.get('file', '').endswith('.wav'):
+                try:
+                    words = align_reference(path/media['file'], text, start, offset, take['duration_s'])
+                    message = "Draft timing from local audio alignment. Listen and adjust before keeping."
+                except AlignmentError as exc:
+                    message = str(exc)
+            else:
+                message = "Word timing needs a WAV reference. Record with the Gasp Mac app to capture one automatically."
         if syllables and take.get('media',{}).get('file','').endswith('.wav'):
             acoustic = acoustic_words(text, analyze_audio(path/take['media']['file'], start), offset, take['duration_s'], take.get('prompt_text'))
             if acoustic:
                 words = acoustic
                 message = "Draft boundaries from sound bursts. Listen and adjust before keeping."
         return {"words":words,"message":message,"placed":sum(w.get('start_s') is not None for w in words),
-                "kind":"syllables" if syllables else "speech", "recognition_allowed":not syllables}
+                "kind":"syllables" if syllables else "speech", "recognition_allowed":False}
 
     @app.get("/api/sessions/{sid}/trials/{tid}/signal")
     def trial_signal(sid: str, tid: str):

@@ -1,0 +1,20 @@
+{
+  "repository": "onnx-community/wav2vec2-base-960h-ONNX",
+  "revision": "729c1a6730fb549c20a1c73a3d3f96f11020225e",
+  "upstream": "facebook/wav2vec2-base-960h",
+  "license": "Apache-2.0",
+  "sample_rate": 16000,
+  "model_file": "model-uint8.onnx",
+  "files": {
+    "model-uint8.onnx": {
+      "remote": "onnx/model_uint8.onnx",
+      "bytes": 95212816,
+      "sha256": "1d9a366c27b2966625cd5035ac3db8847c53bba617169912bb251b42975a3a22"
+    },
+    "vocab.json": {
+      "remote": "vocab.json",
+      "bytes": 358,
+      "sha256": "4178db26b3c7570f6a47f14ac6a1c7b32950b8c2800fb097287e53776934f1c5"
+    }
+  }
+}
