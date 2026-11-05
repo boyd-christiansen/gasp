@@ -2,6 +2,16 @@
 
 USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
+## Offline word timing — 0.7.9, 2026-11-05
+
+Installed **0.7.9 / build 27** includes the pinned English alignment model and CPU runtime. Sentence review now uses known-transcript CTC alignment instead of the optional Apple recognition service. Missing words are filled automatically even when earlier words already have manual intervals. Retry is a bordered button; complete takes hide the redundant action. A background-color transition that briefly reduced selected-word contrast was removed.
+
+Validation: **108 Python tests** pass, including 14 new alignment checks (the loopback capture tests ran with local networking enabled). Browser checks pass **12 alignment scenarios**, **31 timeline scenarios**, and **9 timing/fallback scenarios**. The standalone bundle passes capture/review/training and runs the packaged acoustic model outside the source checkout; a non-speech reference correctly produces a mismatch rather than invented word timing.
+
+The model placed all **22 words across three existing English sentence references** in local, read-only checks, each in under a second on the development Mac. In the installed app, opening the partially annotated active take automatically produced **8 of 8 placed words**. Those annotations were saved as a pending draft, and playback completed. Both existing manual intervals are byte-for-byte equivalent in value; all **58 original audio/radar files** retain their checksums. Only the active take's annotation metadata and its new revision changed. No recording was uploaded or newly captured, and no take was marked verified by this check.
+
+These checks establish functioning automatic drafts, not a quantitative word-boundary accuracy benchmark. Review remains necessary, especially for unfamiliar names, quiet speech, and phonetic boundaries. See [Local word timing](WORD_TIMING.md) for scope, provenance, and packaging.
+
 ## Collection reliability — 0.7.8, 2026-11-05
 
 The [reliability audit](design/RELIABILITY_AUDIT.md) documents the concrete failure paths and design changes. The Python suite passes **94 tests**, including audio attachment retries after a failed manifest write, sensor interruption, partial annotation drafts, and training readiness after trimming. The native audio recovery queue also passes a standalone Swift restart/preservation test, now included in macOS CI.

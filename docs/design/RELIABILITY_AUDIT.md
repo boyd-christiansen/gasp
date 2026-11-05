@@ -1,5 +1,7 @@
 # Collection reliability audit · 0.7.8
 
+**Update:** Gasp 0.7.9 replaces the Apple-dependent sentence timing described below with bundled offline forced alignment. See [the follow-up verification](../VERIFICATION.md#offline-word-timing--079-2026-11-05). The remainder records the original 0.7.8 audit.
+
 5 November 2026. This pass follows the [product principles](PRODUCT_DESIGN.md): protect the work, keep context stable, put state at the affected control, and make recovery part of the workflow. It extends the [earlier interaction audit](INTERACTION_AUDIT.md) and the 0.7.7 timeline fixes.
 
 ## Findings fixed
