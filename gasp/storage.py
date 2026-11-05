@@ -183,19 +183,22 @@ class Store:
                 meta.update(sample_kind="control", words=[], confirmed_text="",
                             transcript_source="not_applicable")
                 updates = {k:v for k,v in updates.items() if k not in {"words", "confirmed_text"}}
-            if "words" in updates:
+            if "words" in updates or updates.get("accepted"):
                 previous_end = 0
-                for word in updates["words"]:
+                for word in meta.get("words", []):
                     if not word.get("text", "").strip():
                         raise ValueError("Word text cannot be empty")
                     a, b = word.get("start_s"), word.get("end_s")
                     if a is None and b is None:
                         continue
-                    if a is None or b is None or not all(math.isfinite(x) for x in (a,b)) or not 0 <= a < b <= meta["duration_s"]+.001 or a < previous_end:
+                    bounds = [x for x in (a,b) if x is not None]
+                    if (a is None or b is None) and updates.get("accepted"):
+                        raise ValueError("Finish or clear the unfinished word boundary before keeping this take. Drafts can be saved at any time.")
+                    if not all(math.isfinite(x) and 0 <= x <= meta["duration_s"]+.001 for x in bounds) or bounds[0] < previous_end or a is not None and b is not None and a >= b:
                         raise ValueError("Word intervals must be ordered, non-overlapping and inside the recording")
-                    previous_end = b
+                    previous_end = bounds[-1]
                 from .audio_review import speech_tokens
-                if speech_tokens(" ".join(w["text"] for w in updates["words"])) != speech_tokens(meta.get("confirmed_text") or ""):
+                if meta.get("words") and speech_tokens(" ".join(w["text"] for w in meta["words"])) != speech_tokens(meta.get("confirmed_text") or ""):
                     raise ValueError("Word annotations must match the confirmed transcript")
             if meta.get("collection_protocol"):
                 if "label" in updates:

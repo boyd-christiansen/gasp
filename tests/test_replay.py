@@ -29,7 +29,7 @@ def test_missing_frame_locations_survive_wrap_and_display_decimation(tmp_path):
     original = (store.trial_dir(session['id'],take['id'])/'radar.npz').read_bytes()
     quality = inspect_take(store,session['id'],take['id'])
     assert quality['radar_gaps'] == preview['gap_details']
-    assert quality['warnings'] == [{'code':'radar_gap','message':'1 radar frame missing (about 50 ms).'}]
+    assert quality['warnings'] == [{'code':'radar_gap','requires_action':False,'message':'1 radar frame missing (about 50 ms).'}]
     assert (store.trial_dir(session['id'],take['id'])/'radar.npz').read_bytes() == original
 
 

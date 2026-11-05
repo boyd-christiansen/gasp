@@ -25,11 +25,12 @@ final class AudioReference {
     private var warmed = false
     private var level: Float = 0
     private var lastBuffer: Double = 0
+    private var preparedAt: Double = 0
     private(set) var stopped = true
 
     func prepare() throws {
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw failure("Enable reference audio in Settings.") }
-        if warmed && engine.isRunning { return }
+        if warmed && engine.isRunning && (status()["needs_restart"] as? Bool != true) { return }
         if warmed { cool() }
         // A stopped engine can retain a stale output format after the default
         // input changes (for example 48 kHz → 24 kHz). Recreate it between visits.
@@ -67,6 +68,7 @@ final class AudioReference {
                 }
             }
         }
+        preparedAt=ProcessInfo.processInfo.systemUptime
         warmed=true
     }
     private func append(_ buffer:AVAudioPCMBuffer,_ when:AVAudioTime) {
@@ -118,10 +120,11 @@ final class AudioReference {
     }
     func status() -> [String:Any] {
         lock.lock()
-        let rms=level, rate=sampleRate, recent=ProcessInfo.processInfo.systemUptime-lastBuffer < 0.6
+        let age=ProcessInfo.processInfo.systemUptime-max(lastBuffer,preparedAt)
+        let rms=level, rate=sampleRate, recent=lastBuffer>0 && ProcessInfo.processInfo.systemUptime-lastBuffer < 0.6
         lock.unlock()
         return ["ready":warmed && engine.isRunning && recent,
-            "needs_restart":warmed && !engine.isRunning,
+            "needs_restart":warmed && stopped && (!engine.isRunning || age>2),
             "level":rms,"sample_rate_hz":rate,"microphone_mode":mode(),
             "device":AVCaptureDevice.default(for:.audio)?.localizedName ?? "Mac sound input",
             "voice_processing":engine.inputNode.isVoiceProcessingEnabled]
@@ -187,6 +190,9 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     let overlayState = OverlayState()
     var panel: NSPanel!
     let audio = AudioReference()
+    lazy var recovery = ReferenceRecovery(root:support.appendingPathComponent("AudioRecovery",isDirectory:true))
+    var recoveringAudio = false
+    var attachedAudioKeys = Set<String>()
     let speech = SpeechReference()
     let startCue = StartCue()
     var worker: Process?
@@ -206,6 +212,20 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     var hideOverlay: DispatchWorkItem?
     var overlayExpiresAt: TimeInterval = 0
     var support: URL!
+
+    func uploadReference(_ entry:ReferenceRecovery.Entry,base:URL) async throws {
+        var request=URLRequest(url:URL(string:"/api/sessions/\(entry.sid)/trials/\(entry.tid)/media",relativeTo:base)!.absoluteURL)
+        request.httpMethod="PUT";request.timeoutInterval=20
+        request.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization")
+        request.setValue("audio/wav",forHTTPHeaderField:"Content-Type")
+        request.setValue(String(data:entry.timing,encoding:.utf8),forHTTPHeaderField:"X-Audio-Timing")
+        let (data,response)=try await URLSession.shared.upload(for:request,fromFile:recovery.audio(entry))
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw failure("Audio attachment failed: \(String(data:data,encoding:.utf8) ?? "unknown error")")
+        }
+        attachedAudioKeys.insert(entry.key)
+        try recovery.acknowledge(entry)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         support = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Gasp",isDirectory:true)
@@ -382,14 +402,28 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                     guard let sid = body["sid"] as? String,let tid = body["tid"] as? String,
                           sid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil,
                           tid.range(of:"^[a-zA-Z0-9_-]{1,80}$",options:.regularExpression) != nil else { throw failure("Invalid take identifier.") }
-                    let (url,timing) = try audio.reference()
-                    var request = URLRequest(url:URL(string:"/api/sessions/\(sid)/trials/\(tid)/media",relativeTo:base)!.absoluteURL)
-                    request.httpMethod = "PUT"; request.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization")
-                    request.setValue("audio/wav",forHTTPHeaderField:"Content-Type")
-                    request.setValue(String(data:try JSONSerialization.data(withJSONObject:timing),encoding:.utf8),forHTTPHeaderField:"X-Audio-Timing")
-                    let (data,response) = try await URLSession.shared.upload(for:request,fromFile:url)
-                    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw failure("Audio attachment failed: \(String(data:data,encoding:.utf8) ?? "unknown error")") }
-                    audio.discard(); result = ["ok":true]
+                    let key=sid + "--" + tid
+                    if attachedAudioKeys.contains(key) { result=["ok":true];break }
+                    let entry:ReferenceRecovery.Entry
+                    if let queued=try recovery.entries().first(where:{$0.key==key}) { entry=queued }
+                    else {
+                        let (url,timing)=try audio.reference()
+                        entry=try recovery.enqueue(file:url,sid:sid,tid:tid,timing:timing)
+                        audio.discard()
+                    }
+                    // A transport failure is recoverable; never delete its queued WAV.
+                    do { try await uploadReference(entry,base:base); result=["ok":true] }
+                    catch { result=["ok":false,"pending":true,"message":"Audio is saved locally for recovery. \(error.localizedDescription)"] }
+                case "audioRecover":
+                    guard !recoveringAudio else { throw failure("Audio recovery is already running.") }
+                    recoveringAudio=true
+                    defer { recoveringAudio=false }
+                    var recovered=0, pending=0, lastError=""
+                    for entry in try recovery.entries() {
+                        do { try await uploadReference(entry,base:base); recovered += 1 }
+                        catch { pending += 1;lastError=error.localizedDescription }
+                    }
+                    result=["recovered":recovered,"pending":pending,"message":lastError]
                 case "cue":
                     let timing=try await startCue.play();audio.markCue(timing);result=timing
                 case "status":

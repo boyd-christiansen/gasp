@@ -594,8 +594,17 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
             raise ValueError("Expected a browser WebM/MP4 recording")
         suffix = ".wav" if request.headers.get("content-type", "").startswith("audio/wav") else ".mp4" if request.headers.get("content-type", "").startswith("video/mp4") else ".webm"
         target = path / ("reference" + suffix)
-        if target.exists():
-            raise ValueError("Reference recording already exists")
+        # Validate metadata before creating a file. Retries must be safe even if
+        # the prior request committed the WAV but its response/manifest failed.
+        audio_timing = None
+        if request.headers.get("x-audio-timing"):
+            try:
+                audio_timing = json.loads(request.headers["x-audio-timing"],
+                                          parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
+                if not isinstance(audio_timing, dict):
+                    raise ValueError("Expected an object")
+            except (ValueError, TypeError) as exc:
+                raise ValueError("Invalid audio timing metadata") from exc
         tmp = path / (uuid.uuid4().hex + ".upload")
         count, digest = 0, hashlib.sha256()
         try:
@@ -606,25 +615,32 @@ def create_app(data_root=None, research_enabled=False, app_token=None):
                         raise ValueError("Reference media exceeds 256 MiB")
                     f.write(chunk)
                     digest.update(chunk)
-            os.replace(tmp, target)
+                f.flush()
+                os.fsync(f.fileno())
+            if not count:
+                raise ValueError("Reference recording is empty")
+            media_fields = {"file": target.name, "bytes": count, "sha256": digest.hexdigest(),
+                "browser_start_server_ns": request.headers.get("x-media-start-server-ns"),
+                "clock_uncertainty_ms": request.headers.get("x-clock-uncertainty-ms"),
+                "native_audio_timing": audio_timing,
+                "synchronization": "AVAudioEngine host/sample timestamps; software radar anchor, not hardware synchronized"
+                    if audio_timing else "Browser/software timestamps only; not hardware synchronized"}
+            with store.lock:
+                meta = json.loads(meta_path.read_text())
+                existing = meta.get("media")
+                if existing and existing != media_fields:
+                    raise ValueError("A different reference recording already exists; the original is preserved")
+                if target.exists():
+                    with target.open("rb") as original:
+                        if hashlib.file_digest(original, "sha256").hexdigest() != digest.hexdigest():
+                            raise ValueError("A different reference recording already exists; the original is preserved")
+                else:
+                    os.replace(tmp, target)
+                if not existing:
+                    store.add_trial_fields(sid, tid, {"media": media_fields})
+            return media_fields
         finally:
             tmp.unlink(missing_ok=True)
-        audio_timing = None
-        if request.headers.get("x-audio-timing"):
-            try:
-                audio_timing = json.loads(request.headers["x-audio-timing"])
-            except (ValueError, TypeError) as exc:
-                target.unlink(missing_ok=True)
-                raise ValueError("Invalid audio timing metadata") from exc
-        media_fields = {"file": target.name, "bytes": count, "sha256": digest.hexdigest(),
-                         "browser_start_server_ns": request.headers.get("x-media-start-server-ns"),
-                         "clock_uncertainty_ms": request.headers.get("x-clock-uncertainty-ms"),
-                         "synchronization": "Browser/software timestamps only; not hardware synchronized"}
-        media_fields["native_audio_timing"] = audio_timing
-        if audio_timing:
-            media_fields["synchronization"] = "AVAudioEngine host/sample timestamps; software radar anchor, not hardware synchronized"
-        store.add_trial_fields(sid, tid, {"media": media_fields})
-        return media_fields
 
     @app.get("/api/sessions/{sid}/trials/{tid}/media")
     def get_media(sid: str, tid: str, processing: bool = False):

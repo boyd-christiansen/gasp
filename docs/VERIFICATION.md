@@ -2,6 +2,13 @@
 
 USB acquisition on physical hardware is now verified; see [the latest bring-up](#physical-usb-bring-up--2026-10-31). Earlier sections retain the synthetic and emulated evidence from 2026-10-30. No check here establishes real silent-speech recognition.
 
+## Collection reliability — 0.7.8, 2026-11-05
+
+The [reliability audit](design/RELIABILITY_AUDIT.md) documents the concrete failure paths and design changes. The Python suite passes **94 tests**, including audio attachment retries after a failed manifest write, sensor interruption, partial annotation drafts, and training readiness after trimming. The native audio recovery queue also passes a standalone Swift restart/preservation test, now included in macOS CI.
+
+Isolated browser checks cover 33 collect–review–train interactions, 20 timeline interactions, 9 timing fallback cases, 9 update-continuity cases, and microphone permission denial/retry with saved progress. Additional failure checks cover delayed Keep responses, unfinished boundaries, failed microphone preparation, retained audio, quality-warning triage, countdown interruption and reconnection after an error. At 900 × 650 the checked recorder has one vertical scroll surface and no horizontal page overflow. These checks use synthetic data and a mock permission bridge; they do not establish physical microphone or radar speech accuracy.
+
+
 ## Capture navigation — 0.7.2, 2026-11-02
 
 The Capture tab now returns to the overview through the existing draft-saving path. The library toggle is one labeled Recordings control; the inactive Capture label on the overview is removed. Radar controls remain right-aligned when Dictation hides the radar tabs.

@@ -1,5 +1,7 @@
 # Interaction audit · Gasp 0.7.3
 
+For the current failure-path audit, see [Collection reliability · 0.7.8](RELIABILITY_AUDIT.md).
+
 2 November 2026. This pass follows the [product design principles](PRODUCT_DESIGN.md): preserve context, explain state at the affected control, and verify the whole sequence.
 
 ## Findings and changes
@@ -13,7 +15,7 @@
 | Radar | Reconnect attempted a second connection; the displayed recorder could outlive its backend session. | Apply & reconnect disconnects first. The next capture resumes the same session, only with its original source and profile and fresh radar data. |
 | Connection status | Lost backend access could leave a connected indicator visible. | The control reports Engine unavailable and recovers when communication returns. Controls are disabled during connection changes and restored on failure. |
 | Recording | Global shortcuts could begin a timed countdown outside the recorder or through a modal. | New captures require the active recorder, compatible radar, and no modal. Active capture can still be finished or cancelled. Enter supports self-paced hold/release on the focused recording button. |
-| Timeline | Keyboard word activation and boundary editing could fail or lose focus. | Word buttons seek on activation; boundary edits retain focus. Missing audio gets relevant instructions; decoding errors replace the loading state. |
+| Timeline | Keyboard word activation and boundary editing could fail or lose focus. | Boundary edits retain focus. As of 0.7.7, selecting a word preserves the playhead; double-clicking seeks. Missing audio gets relevant instructions; decoding errors replace the loading state. |
 | Replay | A missing radar visualization fell back to a nonexistent option; stale take details could linger. | Replay selects an available complex-signal view and clears previous audio, frame requests, quality, and details while loading another take. |
 | Training | Filtered inventory could disagree with run setup; final tests were compared against development scores. | Readiness reflects the chosen subset. A run uses the exact options confirmed. Final-test results are reported separately from development comparisons. |
 

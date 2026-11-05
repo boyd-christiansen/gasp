@@ -24,7 +24,7 @@ ditto build/macos/worker/gasp-capture "$app/Contents/Resources/capture"
 clang -fobjc-arc -fmodules -fmodules-cache-path="$CLANG_MODULE_CACHE_PATH" -c macos/Sources/AudioInput.m -o build/macos/AudioInput.o
 swiftc -swift-version 5 -O -module-cache-path "$SWIFT_MODULECACHE_PATH" -import-objc-header macos/Sources/AudioInput.h \
   -framework AppKit -framework WebKit -framework AVFoundation -framework SwiftUI -framework Speech \
-  macos/Sources/RecordingGesture.swift macos/Sources/SpeechReference.swift macos/Sources/LogoParticles.swift macos/Sources/StartCue.swift macos/Sources/main.swift build/macos/AudioInput.o -o "$app/Contents/MacOS/Gasp"
+  macos/Sources/ReferenceRecovery.swift macos/Sources/RecordingGesture.swift macos/Sources/SpeechReference.swift macos/Sources/LogoParticles.swift macos/Sources/StartCue.swift macos/Sources/main.swift build/macos/AudioInput.o -o "$app/Contents/MacOS/Gasp"
 .venv/bin/python scripts/collect-app-licenses.py "$app/Contents/Resources/ThirdPartyLicenses"
 codesign --force --deep --sign - "$app"
 print "Built $app"

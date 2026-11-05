@@ -81,6 +81,7 @@ class Engine:
             if source:
                 source.close()
             self.status = "disconnected"
+            self.error = None
 
     def close(self):
         if self.recording:
@@ -95,6 +96,8 @@ class Engine:
     def _error(self, message):
         with self.lock:
             self.error, self.status = message, "error"
+            if self.recording:
+                self.recording["_stop"].set()
 
     def _frame(self, frame, stamp):
         try:
@@ -265,7 +268,14 @@ class Engine:
     def _finish_record(self, rid, duration, articulation, notes):
         with self.lock:
             rec = self.recording
-        rec["_stop"].wait(duration)
+        deadline = time.monotonic() + duration
+        while not rec["_stop"].wait(min(.1, max(0, deadline-time.monotonic()))):
+            with self.lock:
+                latest = self.ring[-1]["t"] if self.ring else rec["started_ns"]
+                if time.monotonic_ns()-latest > 2_000_000_000:
+                    self._error("Radar data stopped during this take. Reconnect the radar and record it again.")
+            if time.monotonic() >= deadline:
+                break
         rec["ended_ns"] = time.monotonic_ns()
         if rec.get("collection") and not rec["_cancel"].is_set():
             with self.lock:

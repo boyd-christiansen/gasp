@@ -66,4 +66,13 @@ def native_preview():
 def native_bridge():
     return FileResponse(Path(__file__).with_name('native_preview_bridge.js'),media_type='text/javascript')
 
+@app.get('/failure-preview')
+def failure_preview():
+    html=Path('gasp/static/training.html').read_text()
+    return HTMLResponse(html.replace('</body>', '<script src="/failure-regression.js"></script></body>'))
+
+@app.get('/failure-regression.js')
+def failure_regression():
+    return FileResponse(Path(__file__).with_name('failure_regression.js'),media_type='text/javascript')
+
 uvicorn.run(app,host='127.0.0.1',port=args.port,access_log=False)

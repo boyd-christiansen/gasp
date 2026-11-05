@@ -251,3 +251,18 @@ def test_mixed_mode_headline_does_not_hide_silent_errors():
     assert report['metrics']['wer']==.5
     assert headline(report)['wer']==1
     assert headline({'metrics':None}) is None
+
+
+def test_readiness_excludes_overtrimmed_and_unreadable_recordings(tmp_path):
+    store, ids, scope = prepared_store(tmp_path)
+    take = store.trials(ids[0])[0]
+    store.update_trial(ids[0], take['id'], dict(utterance_start_s=0, utterance_end_s=.05, accepted=True))
+    inv = data.inventory(store, **scope)
+    assert not inv['ready']
+    assert any('eight radar frames' in item['reason'] for item in inv['excluded'])
+    # Changing the trim invalidates the cached timing window.
+    store.update_trial(ids[0], take['id'], dict(utterance_end_s=take['duration_s'], accepted=True))
+    assert data.inventory(store, **scope)['ready']
+    (store.trial_dir(ids[0], take['id'])/'radar.npz').write_bytes(b'corrupt fixture')
+    inv = data.inventory(store, **scope)
+    assert not inv['ready'] and any('cannot be read' in item['reason'] for item in inv['excluded'])

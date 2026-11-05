@@ -99,41 +99,41 @@ def inspect_take(store, sid, tid):
         profile = store.session(sid)['profile']
         unit = 'sample' if profile.get('lvds_adc') else 'frame'
         estimate = f" (about {count/profile['frame_hz']*1000:.0f} ms)" if not profile.get('lvds_adc') and profile.get('frame_hz',0)>0 else ''
-        result['warnings'].append({'code':'radar_gap','message':f"{count} radar {unit}{'' if count==1 else 's'} missing{estimate}."})
+        result['warnings'].append({'code':'radar_gap','requires_action':count/max(1,take.get('frames',0))>.05,'message':f"{count} radar {unit}{'' if count==1 else 's'} missing{estimate}."})
     planned = take.get('required_duration_s') if capture_mode(take) == 'timed' else None
     if capture_mode(take) == 'timed' and not planned:
         steps=store.session(sid).get('collection',{}).get('plan',{}).get('steps',[])
         planned=next((s['duration_s'] for s in steps if s['step_id']==take.get('plan_step_id')),None)
     duration = take.get('capture_duration_s', take['duration_s'])
     if is_control(take) and planned and duration < .8*planned:
-        result['warnings'].append({'code':'too_short','message':f"Recorded {duration:.1f} s; this timed reference needs {planned:g} s. Record it again."})
+        result['warnings'].append({'code':'too_short','requires_action':True,'message':f"Recorded {duration:.1f} s; this timed reference needs {planned:g} s. Record it again."})
     media = take.get('media')
     if not media:
         if take.get('reference_expected') and not take.get('synthetic'):
-            result['warnings'].append({'code':'missing_audio','message':'The microphone reference was not saved. Record this take again.'})
+            result['warnings'].append({'code':'missing_audio','requires_action':True,'message':'The microphone reference is not attached yet. Try Recover audio in microphone settings before recording again.'})
         return result
     timing = media.get('native_audio_timing') or {}
     if timing.get('sample_discontinuities', 0):
-        result['warnings'].append({'code':'audio_gap','message':'The microphone stream was interrupted. Listen before keeping this take.'})
+        result['warnings'].append({'code':'audio_gap','requires_action':True,'message':'The microphone stream was interrupted. Listen before keeping this take.'})
     if timing.get('microphone_mode') == 'voice_isolation':
-        result['warnings'].append({'code':'voice_isolation','message':'macOS Voice Isolation was active. Use Standard microphone mode for syllable capture.'})
+        result['warnings'].append({'code':'voice_isolation','requires_action':False,'message':'macOS Voice Isolation was active. Use Standard microphone mode for syllable capture.'})
     if not media['file'].endswith('.wav'):
         return result
     try:
         a = analyze_audio(path/media['file'], result['processing_window']['start_s'])
     except (ValueError, OSError) as exc:
-        result['warnings'].append({'code':'unreadable_audio','message':f'Cannot inspect reference audio: {exc}'})
+        result['warnings'].append({'code':'unreadable_audio','requires_action':True,'message':f'Cannot inspect reference audio: {exc}'})
         return result
     result['audio'] = {k:v for k,v in a.items() if k != 'envelope'}
     if not is_control(take) and take.get('articulation') in {'voiced','whisper'}:
         tokens = speech_tokens(take.get('target_text') or take.get('label',''))
         phonetic = is_syllable_exercise(take)
         if a['audible_s'] < .18:
-            result['warnings'].append({'code':'quiet_audio','message':'The microphone level is very low. Listen to check that the full prompt is audible; this level check cannot tell whether speech is missing.'})
+            result['warnings'].append({'code':'quiet_audio','requires_action':False,'message':'The microphone level is very low. Listen to check that the full prompt is audible; this level check cannot tell whether speech is missing.'})
         elif phonetic and len(a['peaks_s']) < max(2, len(tokens)*.5):
-            result['warnings'].append({'code':'incomplete_reference','message':f"Automatic timing found {len(a['peaks_s'])} distinct sound peaks for {len(tokens)} prompted sounds. Sounds can blend together; listen to check the take before continuing."})
+            result['warnings'].append({'code':'incomplete_reference','requires_action':False,'message':f"Automatic timing found {len(a['peaks_s'])} distinct sound peaks for {len(tokens)} prompted sounds. Sounds can blend together; listen to check the take before continuing."})
         if a['clipped_fraction'] > .005:
-            result['warnings'].append({'code':'clipping','message':'Reference audio is clipping. Lower the microphone input level and record again.'})
+            result['warnings'].append({'code':'clipping','requires_action':True,'message':'Reference audio is clipping. Lower the microphone input level and record again.'})
     return result
 
 

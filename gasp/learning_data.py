@@ -4,12 +4,14 @@ Snapshots pin annotations; original radar stays in its existing location. Readin
 one never consults the current transcript, and deleting a take invalidates reuse.
 """
 from collections import Counter
+from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
 import re
 import time
 import uuid
+from zipfile import BadZipFile
 
 import numpy as np
 
@@ -98,6 +100,18 @@ def leakage_errors(rows, task):
     return list(dict.fromkeys(problems))
 
 
+@lru_cache(maxsize=1024)
+def window_frames(path, mtime_ns, size, start, end):
+    # Read only the small timing array. Cache by file identity and trim so the
+    # continuously refreshed readiness view does not decompress radar cubes.
+    with np.load(path, allow_pickle=False) as data:
+        t = data["timestamps_ns"]
+        if not len(t) or not np.isfinite(t).all() or np.any(np.diff(t) <= 0):
+            raise ValueError("Invalid radar timestamps")
+        relative = (t-t[0])/1e9
+        return int(np.count_nonzero((relative >= start) & (relative <= end)))
+
+
 def inventory(store, subject, source, profile, task="phrases", include_voiced=False, exclude_sessions=()):
     if task not in {"phrases", "sentences"}:
         raise ValueError("Unknown training task")
@@ -143,6 +157,20 @@ def inventory(store, subject, source, profile, task="phrases", include_voiced=Fa
                     reason = "No reviewed transcript"
                 if not reason and not (store.trial_dir(session["id"], trial["id"]) / "radar.npz").is_file():
                     reason = "Radar file is missing"
+                if not reason:
+                    path = store.trial_dir(session["id"], trial["id"]) / "radar.npz"
+                    start, end = trial.get("utterance_start_s", 0), trial.get("utterance_end_s", trial["duration_s"])
+                    try:
+                        stat = path.stat()
+                        measured = window_frames(path, stat.st_mtime_ns, stat.st_size, start, end)
+                        if measured < 8:
+                            reason = "Fewer than eight radar frames remain after trimming"
+                        elif task == "sentences":
+                            from .sequence_model import minimum_ctc_frames, targets
+                            if measured < minimum_ctc_frames(targets(normalize_text(text))):
+                                reason = "Transcript is too long for the measured radar window"
+                    except (OSError, ValueError, KeyError, EOFError, BadZipFile):
+                        reason = "Radar timing data cannot be read"
                 if reason:
                     excluded.append(dict(session_id=session["id"], trial_id=trial["id"], reason=reason,
                                          text=trial.get("prompt_text") or trial["label"]))

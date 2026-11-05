@@ -100,3 +100,11 @@ uv sync --frozen --extra dev --extra macos-build
 The build freezes the Python worker and compiles the AppKit/WebKit/SwiftUI shell with Apple's Speech framework. It outputs `dist/Gasp.app`, with dependency notices and an ad-hoc signature. Tested on Apple Silicon macOS 26. The declared minimum is macOS 13, but other OS/hardware combinations are unverified. Distribution needs Developer ID signing/notarization; this project does not disable Gatekeeper.
 
 See [verification](VERIFICATION.md) for the distinction between physical USB checks, synthetic UI/bundle checks, emulated DCA behavior, and microphone/speech checks still needed.
+
+## Recovery and collection interruptions
+
+Completed microphone references in the native app are copied into local recovery storage before being attached to their radar take. If attachment fails, the app retains that copy and retries on launch. **Settings → Microphone → Recover audio** retries immediately. Originals already attached to a take cannot be replaced by a different upload. If even local recovery storage fails, recover the audio before starting another take or quitting. Browser-only capture retains its pending reference while the page stays open, without restart recovery.
+
+Small radar gaps and uncertain acoustic checks stay visible in review but do not interrupt every prompt. More substantial failures request attention immediately. A stalled radar ends the affected capture and lets you reconnect; it does not save an incomplete sample as training data.
+
+A partially marked word can be saved as a draft and resumed later. Before keeping the take, finish that interval or clear its timing. Untimed words are allowed: the reviewed transcript is sufficient for whole-utterance training. See the [reliability audit](design/RELIABILITY_AUDIT.md) for the tested failure cases and remaining physical acceptance checks.

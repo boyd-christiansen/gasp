@@ -8,6 +8,7 @@ window.webkit={messageHandlers:{gasp:{postMessage(message){queueMicrotask(()=>{
  case 'audioPermission':permissionAllowed=++permissionAttempts>1;if(!permissionAllowed)error='Synthetic permission denied. Retry to simulate allowing access.';break;
  case 'audioPrepare':if(!permissionAllowed)error='Synthetic microphone not authorized';break;
  case 'audioStatus':result={ready:permissionAllowed,device:'Synthetic microphone',level:0,microphone_mode:'standard'};break;
+ case 'audioRecover':result={recovered:0,pending:0};break;
  case 'audioCool':case 'status':break;
  case 'speechAlign':window.mockSpeechCalls++;error='Siri and Dictation are disabled';break;
  default:error='Unsupported mock native action: '+message.action;
