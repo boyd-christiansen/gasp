@@ -223,7 +223,8 @@ timelineCheck.onclick=async()=>{
   const event=(target,t,lane='words',container=$('timelineSheet'))=>({target,currentTarget:container,button:0,buttons:1,pointerId:1,...point(t,lane),preventDefault(){}});
   // Synthetic pointer events cannot own a browser pointer. Stub only capture;
   // exercise the production handlers, DOM hit targets, layout, storage and audio.
-  for(const el of [$('timelineSheet'),$('reviewTranscript')])el.setPointerCapture=()=>{};
+  let capturedBy;
+  w.Element.prototype.setPointerCapture=function(){capturedBy=this;};
   const drag=(target,a,b,lane='words',cancel=false)=>{const el=$('timelineSheet');el.onpointerdown(event(target,a,lane));el.onpointermove(event(target,b,lane));(cancel?el.onpointercancel:el.onpointerup)(event(target,b,lane));};
   const span=i=>d.querySelector(`[data-span="${i}"]`),start=i=>parseFloat(span(i).style.left)/100*duration,end=i=>start(i)+parseFloat(span(i).style.width)/100*duration;
   // Clear only synthetic fixture timings for repeatable checks.
@@ -235,11 +236,13 @@ timelineCheck.onclick=async()=>{
   const anchor=time();click('[data-transcript="0"]');assert(time()===anchor,'Selecting a word preserves the listening position');
   drag($('timeline'),1,1.5,'words');assert(Math.abs(start(0)-1)<.01&&Math.abs(end(0)-1.5)<.01,'Draw an interval directly in the Words track');assert(time()===anchor,'Drawing a word does not seek');
   await sleep(1);const body=d.querySelector('[data-word="0"]');drag(body,1.2,1.5);assert(Math.abs(start(0)-1.3)<.01&&Math.abs(end(0)-1.8)<.01,'Drag a whole word without changing duration');assert(time()===anchor,'Moving a word preserves the playhead');
+  assert(capturedBy===body,'Word pointer capture preserves the word as the click target');
   drag(d.querySelector('[data-edge="end_s"][data-index="0"]'),1.8,2);assert(Math.abs(end(0)-2)<.01&&time()===anchor,'Trimming preserves the playhead');
   const hoverStart=start(0),hoverTarget=d.querySelector('[data-word="0"]'),sheet=$('timelineSheet');sheet.onpointerdown(event(hoverTarget,1.4));sheet.onpointermove({...event(hoverTarget,4),buttons:0});sheet.onpointerup(event(hoverTarget,1.4));assert(Math.abs(start(0)-hoverStart)<.001,'Pointer movement after button release cannot move a word');
   const old=start(0);drag(d.querySelector('[data-word="0"]'),1.4,1.7,'words',true);assert(Math.abs(start(0)-old)<.001,'Cancelling a drag restores the interval');
   await sleep(1);const transcript=d.querySelector('[data-transcript="1"]'),tr=transcript.getBoundingClientRect(),container=$('reviewTranscript');
   container.onpointerdown({...event(transcript,2.2,'words',container),clientX:tr.x+5,clientY:tr.y+5});container.onpointermove(event(transcript,2.2,'words',container));container.onpointerup(event(transcript,2.2,'words',container));
+  assert(capturedBy===transcript,'Transcript pointer capture preserves the word as the click target');
   assert(Math.abs(start(1)-2.2)<.01&&end(1)>start(1),'Drag an unplaced transcript word into the timeline');assert(time()===anchor,'Dropping a word preserves the playhead');
   drag(d.querySelector('[data-word="0"]'),1.4,6);assert(end(0)<=start(1)+.001,'Whole-word movement cannot cross the next word');
   await sleep(1);click('[data-transcript="1"]');click('#playButton');await wait(()=>$('playButton').getAttribute('aria-label')==='Pause recording','Audio playback did not start');

@@ -71,7 +71,10 @@ function renderWordDraft(){
 }
 function beginWordEdit(e,drag){
  timelineDrag={...drag,x:e.clientX,y:e.clientY,before:JSON.stringify(words),wasDirty:dirty,reviewText:$('reviewState').textContent};
- e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drawTimeline();
+ // Capture on the word itself. Capturing on its parent retargets click/dblclick
+ // to that parent in WebKit, making the advertised double-click seek a no-op.
+ const target=e.target.closest('[data-transcript],[data-word],[data-edge]')||e.currentTarget;
+ e.preventDefault();target.setPointerCapture(e.pointerId);drawTimeline();
 }
 function rememberEdit(drag){if(!drag.undoAdded){pushUndo();drag.undoAdded=true;}}
 $('timelineSheet').onpointerdown=e=>{
