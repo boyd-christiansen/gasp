@@ -180,7 +180,7 @@ struct CaptureOverlay: View {
     }
 }
 
-final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
+final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var statusItem: NSStatusItem!
@@ -204,6 +204,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var startupTimer: Timer?
     var startupChecks = 0
     var hideOverlay: DispatchWorkItem?
+    var overlayExpiresAt: TimeInterval = 0
     var support: URL!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -222,6 +223,7 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         web.setValue(false,forKey:"drawsBackground")
         window = NSWindow(contentRect:NSRect(x:0,y:0,width:1230,height:870),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
         window.title = "Gasp"; window.titlebarAppearsTransparent = true
+        window.delegate = self
         window.backgroundColor = NSColor.white
         window.appearance = NSAppearance(named:.aqua)
         window.minSize = NSSize(width:860,height:650); window.contentView = web
@@ -255,6 +257,24 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.hasShadow = true; panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView:CaptureOverlay(state:overlayState))
+    }
+    func refreshOverlay() {
+        guard panel != nil else { return }
+        // The recorder already owns feedback while Gasp is in front. The
+        // floating companion is only needed after switching away or minimizing.
+        let inApp = NSApp.isActive && window.isVisible && !window.isMiniaturized
+        guard !inApp && (recording || ProcessInfo.processInfo.systemUptime < overlayExpiresAt) else {
+            panel.orderOut(nil); return
+        }
+        if let screen = NSScreen.main { panel.setFrameOrigin(NSPoint(x:screen.visibleFrame.midX-185,y:screen.visibleFrame.minY+28)) }
+        panel.orderFrontRegardless()
+    }
+    func applicationDidBecomeActive(_ notification: Notification) { refreshOverlay() }
+    func applicationDidResignActive(_ notification: Notification) { refreshOverlay() }
+    func windowDidMiniaturize(_ notification: Notification) { refreshOverlay() }
+    func windowDidDeminiaturize(_ notification: Notification) { refreshOverlay() }
+    func windowWillClose(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in self?.refreshOverlay() }
     }
     func startWorker() throws {
         guard let resource = Bundle.main.resourceURL else { throw failure("App resources are missing.") }
@@ -379,11 +399,12 @@ final class Application: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     overlayState.elapsed = body["elapsed"] as? Double ?? 0
                     overlayState.limit = body["limit"] as? Double ?? 0
                     hideOverlay?.cancel()
-                    if recording || title.hasPrefix("Saved") || title.contains("attention") {
-                        if let screen = NSScreen.main { panel.setFrameOrigin(NSPoint(x:screen.visibleFrame.midX-185,y:screen.visibleFrame.minY+28)) }
-                        panel.orderFrontRegardless()
-                        if !recording { let hide = DispatchWorkItem { [weak self] in self?.panel.orderOut(nil) }; hideOverlay = hide; DispatchQueue.main.asyncAfter(deadline:.now()+1.6,execute:hide) }
-                    } else { panel.orderOut(nil) }
+                    overlayExpiresAt = !recording && (title.hasPrefix("Saved") || title.contains("attention")) ? ProcessInfo.processInfo.systemUptime+1.6 : 0
+                    refreshOverlay()
+                    if overlayExpiresAt > 0 {
+                        let hide = DispatchWorkItem { [weak self] in self?.refreshOverlay() }
+                        hideOverlay = hide; DispatchQueue.main.asyncAfter(deadline:.now()+1.6,execute:hide)
+                    }
                 default: throw failure("Unknown app action.")
                 }
                 reply(id,result:result,error:nil)

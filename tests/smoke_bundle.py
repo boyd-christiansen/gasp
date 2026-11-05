@@ -5,6 +5,7 @@ All artifacts live in a temporary directory and use the labelled simulator.
 """
 import json
 import os
+import plistlib
 from pathlib import Path
 import signal
 import subprocess
@@ -17,6 +18,7 @@ import uuid
 
 def main():
     app = Path(sys.argv[1]).resolve()
+    version = plistlib.loads((app/'Contents/Info.plist').read_bytes())['CFBundleShortVersionString']
     with tempfile.TemporaryDirectory(prefix='gasp-bundle-smoke-') as folder:
         root = Path(folder)
         token = uuid.uuid4().hex + uuid.uuid4().hex
@@ -107,7 +109,7 @@ def main():
                     time.sleep(.05)
                 assert learning['status']=='complete',learning
                 assert learning['result']['development']['metrics'] is None
-                assert learning['source']['version']=='0.7.3' and len(learning['source']['source_sha256'])==64
+                assert learning['source']['version']==version and len(learning['source']['source_sha256'])==64
                 final=api('learning/runs/'+learning['id']+'/final-check','POST',{'confirm':True})
                 deadline=time.monotonic()+20
                 while True:

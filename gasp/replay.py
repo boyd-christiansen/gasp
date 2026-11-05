@@ -6,6 +6,23 @@ import numpy as np
 from .protocol import Parser
 
 
+def radar_gaps(frame_numbers, timestamps_ns):
+    """Bracket skipped sequence numbers with the two received sample times.
+
+    Arrival times bound the gap; they do not locate the missing sample exactly.
+    Use the original sequence, before any display decimation.
+    """
+    numbers = np.asarray(frame_numbers, dtype=np.int64)
+    stamps = np.asarray(timestamps_ns, dtype=np.int64)
+    if len(numbers) < 2:
+        return []
+    delta = np.diff(numbers) & 0xffffffff
+    return [dict(start_s=float((stamps[i]-stamps[0])/1e9),
+                 end_s=float((stamps[i+1]-stamps[0])/1e9),
+                 missing_frames=int(delta[i]-1))
+            for i in np.flatnonzero((delta > 1) & (delta <= 0x7fffffff))]
+
+
 class Replay:
     def __init__(self, store):
         self.store = store
@@ -58,8 +75,7 @@ class Replay:
         r, a = min(max(0, range_bin), z.shape[1]-1), min(max(0, antenna), z.shape[2]-1)
         indices = np.unique(np.linspace(0, len(t)-1, min(limit, len(t)), dtype=int))
         chosen = z[:, r, a]
-        numbers = arr["frame_numbers"].astype(np.int64)
-        gaps = np.flatnonzero(((numbers[1:]-numbers[:-1]) & 0xffffffff) > 1)
+        gaps = radar_gaps(arr["frame_numbers"], arr["timestamps_ns"])
         profile = self.store.session(sid)["profile"]
         phase = np.unwrap(np.angle(z[:, r, a]))
         phase -= phase[0]
@@ -73,7 +89,7 @@ class Replay:
                     range_time=np.abs(z[indices]).mean(axis=2).round(3).tolist(),
                     phase=phase.tolist(), i=chosen.real.tolist(), q=chosen.imag.tolist(),
                     selected_bin=r, antenna=a,
-                    gaps=[[float(t[i]),float(t[i+1])] for i in gaps],
+                    gaps=[[g['start_s'],g['end_s']] for g in gaps], gap_details=gaps,
                     capabilities=dict(range_time=True,phase=True,iq=True,
                         range_doppler=5 in kinds or profile["lvds_adc"], points=1 in kinds or profile.get("points_enabled",False)),
                     display_decimated=len(indices)<len(t),

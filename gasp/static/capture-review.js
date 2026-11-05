@@ -44,7 +44,7 @@ recordButton.onpointerdown=e=>{if(timedTake(currentStep()))return;if(activeSessi
 recordButton.onclick=e=>{if(e.detail===0&&activeSession?.collection?.plan.task!=='reading'&&!timedTake(currentStep()))return;if(timedTake(currentStep()))beginTimedTake().catch(e=>notice(e.message,true));else if(activeSession?.collection?.plan.task==='reading')toggleRecording().catch(e=>notice(e.message,true));};
 act('cancelButton',()=>{if(timedCountdown){countdownCancel=true;return;}return activeRecord&&api('record/'+activeRecord.id+'/cancel','POST');});
 const baseAfterCapture=afterCapture;
-afterCapture=async function(){const take=trials.at(-1);if(!take)return;const quality=await api(`sessions/${take.session_id}/trials/${take.id}/quality`);if(quality.warnings.length){checkedTake=take;stepOverride=take.plan_step_id;renderPrompt();$('captureCheckMessage').textContent=quality.warnings.map(w=>w.message).join(' ');$('captureCheck').hidden=false;$('recordButton').disabled=true;return;}await baseAfterCapture();};
+afterCapture=async function(){const take=trials.at(-1);if(!take)return;const quality=await api(`sessions/${take.session_id}/trials/${take.id}/quality`);if(quality.warnings.length){checkedTake=take;stepOverride=take.plan_step_id;renderPrompt();const gap=quality.radar_gaps?.[0];$('captureCheckMessage').textContent=quality.warnings.map(w=>w.message).join(' ')+(gap?` Gap ${quality.radar_gaps.length>1?'first seen ':''}between ${gap.start_s.toFixed(2)} and ${gap.end_s.toFixed(2)} s. Open review to inspect it on the timeline.`:'');$('captureCheck').hidden=false;$('recordButton').disabled=true;return;}await baseAfterCapture();};
 act('retryCheckedTake',async()=>{if(!checkedTake)return;const take=checkedTake;await api(`sessions/${take.session_id}/trials/${take.id}`,'PATCH',{accepted:false,base_revision:take.annotation_revision||0});trials=await api('sessions/'+take.session_id+'/trials');checkedTake=null;stepOverride=take.plan_step_id;$('captureCheck').hidden=true;renderPrompt();});
 act('reviewCheckedTake',()=>checkedTake&&reviewCapturedTake(checkedTake));
 act('continueCheckedTake',()=>{checkedTake=null;stepOverride=null;$('captureCheck').hidden=true;renderPrompt();return baseAfterCapture();});
@@ -56,6 +56,11 @@ openTake=async function(sid,tid){
   const quality=await api(`sessions/${sid}/trials/${tid}/quality`);if(selected?.id!==tid||stage!=='replay'||tab!=='capture'||dictation)return;
   $('qualitySummary').hidden=!quality.warnings.length;
   $('qualitySummary').innerHTML=quality.warnings.map(w=>`<p>${w.code==='radar_gap'?'<i class="gap-key"></i>':''}${esc(w.message)}</p>`).join('');
+  if(quality.radar_gaps?.length){
+    const gaps=quality.radar_gaps;
+    $('qualitySummary').insertAdjacentHTML('beforeend',`<p>Red markers locate gaps on the ruler; shaded bands bracket them on radar tracks.</p><div class="gap-actions">${gaps.slice(0,8).map((g,i)=>`<button type="button" data-gap="${i}">Show gap · ${g.start_s.toFixed(2)}–${g.end_s.toFixed(2)} s</button>`).join('')}${gaps.length>8?`<span>${gaps.length-8} more on the timeline</span>`:''}</div>`);
+    $('qualitySummary').querySelectorAll('[data-gap]').forEach(button=>button.onclick=()=>{pause();setTime(gaps[Number(button.dataset.gap)].start_s);followTimeline();requestFrame(true);$('timeline').focus();});
+  }
   selected.processing_window=quality.processing_window;
   const cutoff=Math.max(0,(quality.processing_window?.start_s||0)+audioOffset);
   if(quality.processing_window?.start_s){

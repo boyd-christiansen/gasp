@@ -19,7 +19,10 @@ function drawTimeline(){if(!replay||stage!=='replay'||tab!=='capture'||dictation
  if(k==='words'&&!words.some(w=>w.start_s!=null&&w.end_s!=null)){ctx.fillStyle='#999';ctx.textAlign='left';ctx.fillText(selected.media?'Select a word above, then drag across its sound on the waveform':'Word timing is optional · select a word, then use [ and ] to mark boundaries',12,center+3);}
  if(k==='phase'){const values=replay.phase,ts=replay.signal_time_s||replay.time_s;let lo=Infinity,hi=-Infinity;for(const v of values){lo=Math.min(lo,v);hi=Math.max(hi,v);}line(ctx,values,i=>x(ts[i]),v=>l.y+l.height-8-(v-lo)/(hi-lo||1)*(l.height-16),'#666');}
  if(k==='range'){const data=replay.range_time,ts=replay.time_s;for(let i=0;i<data.length;i++){const a=x(ts[i]),b=x(ts[i+1]??replay.duration_s);for(let j=0;j<data[i].length;j++){const gray=Math.round(255-210*Math.min(1,Math.log1p(data[i][j])/(replay.log_max||1)));ctx.fillStyle=`rgb(${gray},${gray},${gray})`;ctx.fillRect(a,l.y+j/data[i].length*l.height,Math.max(1,b-a+.5),l.height/data[i].length+.5);}}}
- for(const gap of (['phase','range'].includes(k)?replay.gaps||[]:[])){ctx.fillStyle='#bd5c5c22';ctx.fillRect(x(gap[0]),l.y,Math.max(2,x(gap[1])-x(gap[0])),l.height);}}
+ for(const gap of (['phase','range'].includes(k)?replay.gaps||[]:[])){const a=x(gap[0]),width=Math.max(3,x(gap[1])-a);ctx.fillStyle='#b53d3d45';ctx.fillRect(a,l.y,width,l.height);ctx.fillStyle='#a63232';ctx.fillRect(a,l.y,1,l.height);}}
+ // Keep gap markers visible even when both radar tracks are hidden. A small
+ // minimum width makes isolated dropped frames legible at the full-take scale.
+ for(const gap of replay.gaps||[]){const a=x(gap[0]),width=Math.max(3,x(gap[1])-a);ctx.fillStyle='#a63232';ctx.fillRect(a,25,width,7);}
  }
  renderSpans();renderTranscript();renderWordDraft();$('undoTiming').disabled=!undo.length;updateWordLabel();if(playing)followTimeline();}
 function timelineAt(e){const r=$('timelineSheet').getBoundingClientRect();return Math.max(0,Math.min(replay.duration_s,(e.clientX-r.left)/r.width*replay.duration_s));}

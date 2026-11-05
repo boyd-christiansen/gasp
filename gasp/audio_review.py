@@ -8,6 +8,7 @@ import re
 import warnings
 import numpy as np
 from .collection import capture_mode
+from .replay import radar_gaps
 from scipy.io import wavfile
 from scipy.ndimage import uniform_filter1d, binary_closing, binary_opening
 from scipy.signal import find_peaks
@@ -83,10 +84,17 @@ def analyze_audio(path, start_s=0):
 def inspect_take(store, sid, tid):
     path = store.trial_dir(sid, tid)
     take = json.loads((path/'trial.json').read_text())
-    result = {'kind':'control' if is_control(take) else 'speech', 'warnings':[], 'audio':None,
+    result = {'kind':'control' if is_control(take) else 'speech', 'warnings':[], 'audio':None, 'radar_gaps':[],
               'processing_window':processing_window(take)}
     if take.get('frame_gaps'):
-        result['warnings'].append({'code':'radar_gap','message':f"{take['frame_gaps']} missing radar frame(s). Red bands mark these gaps."})
+        # Read only timing/sequence arrays, not the potentially large I/Q cube.
+        with np.load(path/'radar.npz', allow_pickle=False) as signal:
+            result['radar_gaps'] = radar_gaps(signal['frame_numbers'], signal['timestamps_ns'])
+        count = take['frame_gaps']
+        profile = store.session(sid)['profile']
+        unit = 'sample' if profile.get('lvds_adc') else 'frame'
+        estimate = f" (about {count/profile['frame_hz']*1000:.0f} ms)" if not profile.get('lvds_adc') and profile.get('frame_hz',0)>0 else ''
+        result['warnings'].append({'code':'radar_gap','message':f"{count} radar {unit}{'' if count==1 else 's'} missing{estimate}."})
     planned = take.get('required_duration_s') if capture_mode(take) == 'timed' else None
     if capture_mode(take) == 'timed' and not planned:
         steps=store.session(sid).get('collection',{}).get('plan',{}).get('steps',[])

@@ -1,6 +1,7 @@
 """Isolated, explicitly synthetic Training UI preview. Never use the live data root."""
 from pathlib import Path
 import argparse
+import numpy as np
 import uvicorn
 from fastapi.responses import FileResponse
 from gasp.cli import seed_demo
@@ -25,6 +26,12 @@ if not store.sessions():
             store.update_trial(sid,t['id'],dict(confirmed_text=t['label'],accepted=True))
     atomic_json(root/'preferences.json',dict(setup=dict(subject='synthetic-fixture',location='UI verification',distance_cm=45),
         connection=dict(source='simulator',profile='usb-phase-20hz'),reference_audio=False))
+    from gasp.profile import bundled_profile
+    session=store.create_session('Gap review fixture','synthetic-fixture','simulator',bundled_profile('usb-phase-20hz'))
+    numbers=np.delete(np.arange(121),40)
+    store.save_trial(session['id'],'Synthetic gap review',numbers*50_000_000,
+        np.ones((120,64,12))*(100+20j),numbers,
+        extra=dict(articulation='voiced',accepted=False,synthetic=True,prompt_text='Synthetic gap review'))
 @app.get('/ui-check')
 def ui_check():
     return FileResponse(Path(__file__).with_name('workspace_check.html'))

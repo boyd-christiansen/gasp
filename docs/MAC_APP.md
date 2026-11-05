@@ -17,6 +17,8 @@ Gasp collects and reviews personal radar training data. The installed Mac app bu
 
 The optional global shortcut uses a double tap of Right Option (Right Control or Fn/Globe are alternatives) to begin and one tap to finish. Enable it in Settings and grant Input Monitoring if desired. Buttons and Space work without that permission. Modifier-plus-typing does not count as a tap.
 
+The recorder shows status and timing in the main window. The floating recording indicator appears only while Gasp is in the background or minimized, and disappears when you return.
+
 ## Reader: longer text and books
 
 Reader preserves document order and divides text into resumable passages of at most 120 words. Each completed passage is saved separately. USB takes have a three-minute ceiling; DCA passages are shortened to fit its 25-second raw-capture limit. Finish before the limit, pause while saving, and start the next passage. This release does not record a whole book as one uninterrupted stream.
@@ -45,6 +47,8 @@ Aloud review automatically suggests timing from local reference audio; **Auto-pl
 For an external forced aligner, import JSON with `timebase: "audio"` or `"radar"` and a `words` array of `{ "text": "hello", "start": 1.2, "end": 1.6 }`. Montreal Forced Aligner's JSON `tiers.words.entries` format is also accepted. The aligner itself is not bundled. Imported word text must match existing reviewed text. Intervals must be ordered, non-overlapping and inside the radar take. Silent takes have intended/manual labels, not audio-established articulation boundaries.
 
 **Timing & notes** contains utterance trim points and an adjustable audio start offset in radar time. Initial synchronization is a host-clock estimate; USB arrival latency and DCA command-to-frame offset remain unmeasured. Fine editing does not increase the sensor's temporal resolution. Edits invalidate prior approval, preserve raw signals and archive earlier annotations. Stale saves from another view are rejected.
+
+A missing-frame warning reports skipped radar sequence numbers, not missing audio. After capture it gives the gap's location; open review and use **Show gap** to seek there. Red ruler markers remain visible with radar tracks hidden, and shaded radar bands bracket the adjacent received samples. At 20 fps one missing frame represents about 50 ms of missing data; the bracketing interval is longer because it includes the neighboring sample times. Raw samples and loss information are retained.
 
 ## Radar views and profiles
 

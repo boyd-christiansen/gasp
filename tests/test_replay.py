@@ -8,7 +8,29 @@ from gasp.profile import bundled_profile
 from gasp.storage import Store
 from gasp.collection import make_plan
 from gasp.protocol import HEADER, TL, MAGIC
-from gasp.replay import Replay
+from gasp.replay import Replay, radar_gaps
+
+
+def test_missing_frame_locations_survive_wrap_and_display_decimation(tmp_path):
+    # The uint32 wrap itself is continuous. One actual skip happens at 2 s.
+    numbers = (np.arange(121, dtype=np.int64) + 0xffffffe0) & 0xffffffff
+    keep = np.arange(121) != 40
+    numbers = numbers[keep]
+    stamps = 9_000_000_000 + np.arange(121)[keep]*50_000_000
+    expected = [dict(start_s=1.95, end_s=2.05, missing_frames=1)]
+    assert radar_gaps(numbers, stamps) == expected
+    store = Store(tmp_path)
+    session = store.create_session('gap fixture','synthetic','simulator',bundled_profile('usb-phase-20hz'))
+    take = store.save_trial(session['id'],'synthetic gap',stamps,np.ones((120,64,12)),numbers)
+    preview = Replay(store).preview(session['id'],take['id'],limit=5)
+    assert preview['display_decimated'] and preview['gaps'] == [[1.95,2.05]]
+    assert preview['gap_details'] == expected
+    from gasp.audio_review import inspect_take
+    original = (store.trial_dir(session['id'],take['id'])/'radar.npz').read_bytes()
+    quality = inspect_take(store,session['id'],take['id'])
+    assert quality['radar_gaps'] == preview['gap_details']
+    assert quality['warnings'] == [{'code':'radar_gap','message':'1 radar frame missing (about 50 ms).'}]
+    assert (store.trial_dir(session['id'],take['id'])/'radar.npz').read_bytes() == original
 
 
 def fixture_take(root):

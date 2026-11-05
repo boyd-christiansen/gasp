@@ -49,6 +49,16 @@ document.getElementById('audit').onclick=async()=>{
   assert(d.activeElement===edge,'Keyboard boundary edits retain focus');
   click('#stepForward');click('#wordSpans [data-word="0"]');
   assert(Number(d.getElementById('timeline').getAttribute('aria-valuenow'))===0,'Timeline word buttons seek on activation');
+  const gapTake=(await request('recordings')).find(t=>t.label==='Synthetic gap review');
+  await openTake(gapTake);await wait(()=>!!d.querySelector('#qualitySummary [data-gap]'),'Gap review controls did not load');
+  assert(d.getElementById('qualitySummary').textContent.includes('50 ms'),'Gap review explains the size of the missing data');
+  for(const name of ['phase','range'])click(`[data-channel="${name}"]`);
+  const gapCanvas=d.getElementById('timeline'),gapCtx=gapCanvas.getContext('2d');
+  const pixel=gapCtx.getImageData(Math.round(2/6*gapCanvas.width),Math.round(28*gapCanvas.height/parseFloat(gapCanvas.style.height)),1,1).data;
+  assert(pixel[0]>pixel[1]*2&&pixel[0]>pixel[2]*2,'Gap ruler remains visible with radar tracks hidden');
+  click('#qualitySummary [data-gap="0"]');
+  assert(Math.abs(Number(d.getElementById('timeline').getAttribute('aria-valuenow'))-1.95)<.001,'Show gap seeks the shared playhead to the actual missing-frame interval');
+  for(const name of ['phase','range'])click(`[data-channel="${name}"]`);
   await home();await training();
   const inspectDelayed=delay('/api/learning/inspect','POST');click('[data-learn="dataset"]');await wait(inspectDelayed,'Dataset request missing');
   click('[data-learn="curriculum"]');release();release=null;await sleep(100);w.fetch=original;
