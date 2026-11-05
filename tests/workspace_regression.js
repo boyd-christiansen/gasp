@@ -219,6 +219,8 @@ timelineCheck.onclick=async()=>{
   await wait(()=>!$('suggestWords').disabled,'Timing did not finish');
   const player=$('referencePlayer');await wait(()=>Number.isFinite(player.duration),'Audio did not load');
   const time=()=>Number($('timeline').getAttribute('aria-valuenow'));
+  player.load();w.setTime(.8);await w.play();
+  assert(player.currentTime>=.79&&player.currentTime<1.2,'Playback honors a seek made before audio metadata was ready');w.pause();
   const rect=()=>$('timelineSheet').getBoundingClientRect(),duration=Number($('playTime').textContent.split('/')[1].replace('s',''));
   const point=(t,lane='words')=>({clientX:rect().left+t/duration*rect().width,clientY:rect().top+(lane==='audio'?55:105)});
   const event=(target,t,lane='words',container=$('timelineSheet'))=>({target,currentTarget:container,button:0,buttons:1,pointerId:1,...point(t,lane),preventDefault(){}});

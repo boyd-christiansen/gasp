@@ -88,7 +88,8 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 .review-actions #reviewState {font-size: 11px; color: var(--muted); flex: 1; min-width: 80px;}
 .review-actions .inline {flex: 0 0 auto; flex-wrap: wrap; gap: 8px; max-width:100%;}
 .review-actions button {appearance:none; -webkit-appearance:none; display:inline-flex; text-align:center; flex:0 0 auto; min-width:max-content; color: var(--ink); min-height: 34px; padding: 7px 12px;}
-.review-actions button > span {display:block; flex:none;}
+/* Keep WebKit's sticky-toolbar text on its own paint layer, with glyph room. */
+.review-actions button > span {display:block; flex:none; position:relative; transform:translateZ(0); padding-inline:2px; margin-inline:-2px;}
 .review-actions .primary {color: white;}
 .review-intro {display: block; margin: 12px 0;}
 .transcript-panel {padding: 0;}

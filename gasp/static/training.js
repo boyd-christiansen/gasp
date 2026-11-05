@@ -119,7 +119,12 @@ async function play(){
  if(time>=replay.duration_s)setTime(Math.max(0,(selected.processing_window?.start_s||0)+audioOffset));
  playing=true;lastTick=0;$('playButton').textContent='Ⅱ Pause';$('playButton').setAttribute('aria-label','Pause recording');audio.playbackRate=Number($('playSpeed').value);
  if(selected.media&&time>=audioOffset){
-  try{await audio.play();}catch(e){if(generation!==playbackGeneration)return;pause();throw new Error('Audio playback could not start: '+e.message);}
+  // setTime may have run before media metadata loaded (including the cue cutoff).
+  // Reconcile the audio cursor here; before metadata, this sets its start position.
+  try{const desired=Math.max(0,time-audioOffset);
+   audio.currentTime=Number.isFinite(audio.duration)?Math.min(audio.duration,desired):desired;
+   await audio.play();
+  }catch(e){if(generation!==playbackGeneration)return;pause();throw new Error('Audio playback could not start: '+e.message);}
  }
  // An older play() can resolve or reject after Pause or a new playback request.
  if(generation===playbackGeneration&&playing)raf=requestAnimationFrame(playTick);
