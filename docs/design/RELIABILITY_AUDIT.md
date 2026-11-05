@@ -27,7 +27,7 @@ All fixtures are isolated under ignored `test-data/` or temporary directories. T
 - `/ui-check`: 33 interaction checks, 20 timeline checks, 9 timing fallback checks, 9 continuity checks, plus microphone permission-denial/retry and resume checks. The interaction run captures three synthetic calibration takes, trains a local CPU phrase model, evaluates its reserved test data and follows predictions back to review.
 - `/failure-preview`: **23 checks** covering partial drafts, boundary restrictions, delayed Keep navigation, edits during Keep, microphone/clock startup races, audio retry retention, radar loss during countdown and reconnect after an error.
 - `tests/reference_recovery.swift`: reopen the native recovery queue after a simulated restart; verify original preservation, duplicate retry, invalid identifiers and acknowledgement cleanup.
-- Native build and bundle smoke test; installed app playback, settings, progress and physical USB status checked separately. No test silently records a real microphone session.
+- Native build and bundle smoke test passed. Installed app launch, recovery control, saved progress and physical USB status were checked separately. The Mac locked before the final installed playback check; browser playback regressions passed. No test silently records a real microphone session.
 
 Repeat the isolated UI checks with:
 
