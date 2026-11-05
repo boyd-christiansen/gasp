@@ -238,6 +238,11 @@ timelineCheck.onclick=async()=>{
   const ruler={...event($('timeline'),4),clientY:rect().top+15};$('timelineSheet').onpointerdown(ruler);$('timelineSheet').onpointerup(ruler);
   const anchor=time();click('[data-transcript="0"]');assert(time()===anchor,'Selecting a word preserves the listening position');
   drag($('timeline'),1,1.5,'words');assert(Math.abs(start(0)-1)<.01&&Math.abs(end(0)-1.5)<.01,'Draw an interval directly in the Words track');assert(time()===anchor,'Drawing a word does not seek');
+  w.setTime(1.2);click('[data-transcript="0"]');
+  const activeStyle=w.getComputedStyle(d.querySelector('[data-transcript="0"]'));
+  const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+  const fg=luminance(activeStyle.color),bg=luminance(activeStyle.backgroundColor);
+  assert((Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05)>=4.5,'A selected word remains readable while the playhead is inside it');w.setTime(anchor);
   await sleep(1);const body=d.querySelector('[data-word="0"]');drag(body,1.2,1.5);assert(Math.abs(start(0)-1.3)<.01&&Math.abs(end(0)-1.8)<.01,'Drag a whole word without changing duration');assert(time()===anchor,'Moving a word preserves the playhead');
   assert(capturedBy===body,'Word pointer capture preserves the word as the click target');
   drag(d.querySelector('[data-edge="end_s"][data-index="0"]'),1.8,2);assert(Math.abs(end(0)-2)<.01&&time()===anchor,'Trimming preserves the playhead');
