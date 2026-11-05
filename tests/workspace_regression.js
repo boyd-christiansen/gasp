@@ -220,7 +220,7 @@ timelineCheck.onclick=async()=>{
   const time=()=>Number($('timeline').getAttribute('aria-valuenow'));
   const rect=()=>$('timelineSheet').getBoundingClientRect(),duration=Number($('playTime').textContent.split('/')[1].replace('s',''));
   const point=(t,lane='words')=>({clientX:rect().left+t/duration*rect().width,clientY:rect().top+(lane==='audio'?55:105)});
-  const event=(target,t,lane='words',container=$('timelineSheet'))=>({target,currentTarget:container,button:0,pointerId:1,...point(t,lane),preventDefault(){}});
+  const event=(target,t,lane='words',container=$('timelineSheet'))=>({target,currentTarget:container,button:0,buttons:1,pointerId:1,...point(t,lane),preventDefault(){}});
   // Synthetic pointer events cannot own a browser pointer. Stub only capture;
   // exercise the production handlers, DOM hit targets, layout, storage and audio.
   for(const el of [$('timelineSheet'),$('reviewTranscript')])el.setPointerCapture=()=>{};
@@ -236,6 +236,7 @@ timelineCheck.onclick=async()=>{
   drag($('timeline'),1,1.5,'words');assert(Math.abs(start(0)-1)<.01&&Math.abs(end(0)-1.5)<.01,'Draw an interval directly in the Words track');assert(time()===anchor,'Drawing a word does not seek');
   await sleep(1);const body=d.querySelector('[data-word="0"]');drag(body,1.2,1.5);assert(Math.abs(start(0)-1.3)<.01&&Math.abs(end(0)-1.8)<.01,'Drag a whole word without changing duration');assert(time()===anchor,'Moving a word preserves the playhead');
   drag(d.querySelector('[data-edge="end_s"][data-index="0"]'),1.8,2);assert(Math.abs(end(0)-2)<.01&&time()===anchor,'Trimming preserves the playhead');
+  const hoverStart=start(0),hoverTarget=d.querySelector('[data-word="0"]'),sheet=$('timelineSheet');sheet.onpointerdown(event(hoverTarget,1.4));sheet.onpointermove({...event(hoverTarget,4),buttons:0});sheet.onpointerup(event(hoverTarget,1.4));assert(Math.abs(start(0)-hoverStart)<.001,'Pointer movement after button release cannot move a word');
   const old=start(0);drag(d.querySelector('[data-word="0"]'),1.4,1.7,'words',true);assert(Math.abs(start(0)-old)<.001,'Cancelling a drag restores the interval');
   await sleep(1);const transcript=d.querySelector('[data-transcript="1"]'),tr=transcript.getBoundingClientRect(),container=$('reviewTranscript');
   container.onpointerdown({...event(transcript,2.2,'words',container),clientX:tr.x+5,clientY:tr.y+5});container.onpointermove(event(transcript,2.2,'words',container));container.onpointerup(event(transcript,2.2,'words',container));

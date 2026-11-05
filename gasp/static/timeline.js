@@ -99,6 +99,8 @@ $('wordSpans').onclick=e=>{const b=e.target.closest('[data-word]');if(b&&!suppre
 for(const id of ['reviewTranscript','wordSpans'])$(id).ondblclick=e=>{const b=e.target.closest('[data-word],[data-transcript]');if(b)jumpToWord(Number(b.dataset.word??b.dataset.transcript));};
 function updateTimelineEdit(e){
  const drag=timelineDrag;if(!drag||!replay)return;
+ // Ignore hover/pointer restoration events after the physical button is up.
+ if(!(e.buttons&1))return;
  const t=timelineAt(e);drag.moved=drag.moved||Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>4;
  if(drag.scrubbing){setTime(t);return;}
  if(!drag.moved)return;
