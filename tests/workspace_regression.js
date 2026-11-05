@@ -215,6 +215,7 @@ timelineCheck.onclick=async()=>{
   const takes=await(await w.fetch('/api/recordings')).json(),take=takes.find(t=>t.label==='Synthetic timeline sentence');
   if($('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);click(`[data-tid="${take.id}"]`);
   await wait(()=>!$('replayStage').hidden&&$('confirmedText').value==='Please open the window.','Sentence did not open');
+  assert($('keepTakeLabel')?.parentElement===$('keepTake'),'Opening a take preserves its explicit button label');
   await wait(()=>!$('suggestWords').disabled,'Timing did not finish');
   const player=$('referencePlayer');await wait(()=>Number.isFinite(player.duration),'Audio did not load');
   const time=()=>Number($('timeline').getAttribute('aria-valuenow'));
@@ -256,7 +257,9 @@ timelineCheck.onclick=async()=>{
   const preserve=start(1);click('#retryTiming');await wait(()=>!$('retryTiming').disabled,'Retry did not finish');assert(Math.abs(start(1)-preserve)<.001,'Unavailable recognition leaves manual edits intact');
   click('#saveAnnotations');await wait(()=>$('reviewState').textContent==='Draft saved','Draft did not save');
   const saved=await(await w.fetch(`/api/sessions/${take.session_id}/trials/${take.id}`)).json();assert(saved.words[0].source==='manual'&&saved.words[1].start_s>saved.words[0].end_s,'Edited intervals persist as manual, ordered annotations');
-  const button=$('keepTake');for(const width of [900,700,560]){frame.width=width;await sleep(80);const range=d.createRange();range.selectNodeContents(button);const b=button.getBoundingClientRect(),text=range.getBoundingClientRect();assert(text.left>=b.left&&text.right<=b.right&&button.scrollWidth<=button.clientWidth+1,`Keep button text fits at ${width}px`);}
+  const button=$('keepTake'),label=$('keepTakeLabel'),originalLabel=label.textContent;
+  for(const copy of ['Verify & keep','Keep & next →','Keep & continue →']){label.textContent=copy;for(const width of [900,700,560]){frame.width=width;await sleep(80);const range=d.createRange();range.selectNodeContents(label);const b=button.getBoundingClientRect(),text=range.getBoundingClientRect();assert(text.left>=b.left&&text.right<=b.right&&button.scrollWidth<=button.clientWidth+1,`${copy} fits at ${width}px`);}}
+  label.textContent=originalLabel;
   frame.width=1280;frame.height=800;
   out.textContent=`Passed ${passed} timeline checks · selection, drawing, moving, trimming, cancellation, playback, loops, saving, and button layout`;
  }catch(e){out.textContent='FAILED timeline: '+e.message;throw e;}finally{timelineCheck.disabled=false;}
