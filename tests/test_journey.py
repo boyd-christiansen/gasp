@@ -134,3 +134,16 @@ def test_pending_capture_progress_survives_restart_without_unlocking_review_gate
         assert kept.status_code==200,kept.text
         p=progress(c,profile=profile)['steps'][0]
         assert p['recorded']==6 and p['verified']==1 and not p['complete']
+
+
+def test_reconnect_intent_is_explicit_and_persists(tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        assert c.get('/api/preferences').json()['reconnect_radar'] is False
+        saved = c.put('/api/preferences', json={'reconnect_radar': True, 'connection': {
+            'source': 'serial', 'cliPort': '/dev/cu.fixture0', 'dataPort': '/dev/cu.fixture1',
+            'profile': 'usb-phase-20hz', 'unrelated': 'discard'}}).json()
+        assert saved['reconnect_radar'] is True
+        assert 'unrelated' not in saved['connection']
+    with TestClient(create_app(tmp_path)) as c:
+        assert c.get('/api/preferences').json()['reconnect_radar'] is True
+        assert c.put('/api/preferences', json={'reconnect_radar': False}).json()['reconnect_radar'] is False

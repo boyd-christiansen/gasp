@@ -86,8 +86,8 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 #reviewQueue {background: none; border-radius: 0; border-bottom: 1px solid var(--line); margin-bottom: 12px; font-size: 12px; padding-bottom: 8px;}
 .review-actions {position: sticky; top: var(--app-header); z-index: 15; min-height: 54px; padding: 8px 0; margin: 0 0 12px; border-top: 0; border-bottom: 1px solid var(--line); background: #fff; gap: 12px;}
 .review-actions #reviewState {font-size: 11px; color: var(--muted); flex: 1; min-width: 80px;}
-.review-actions .inline {flex-wrap: nowrap; gap: 8px;}
-.review-actions button {color: var(--ink); min-height: 34px; padding: 7px 12px;}
+.review-actions .inline {flex: 0 0 auto; flex-wrap: wrap; gap: 8px; max-width:100%;}
+.review-actions button {flex:0 0 auto; min-width:max-content; color: var(--ink); min-height: 34px; padding: 7px 12px;}
 .review-actions .primary {color: white;}
 .review-intro {display: block; margin: 12px 0;}
 .transcript-panel {padding: 0;}
@@ -200,3 +200,17 @@ main > header > .connection {margin-inline-start: auto; flex-shrink: 0;}
 .timing-assistance summary {cursor:pointer;}
 .timing-assistance p {margin:8px 0;}
 .timing-assistance .text-button {font-size:11px;padding-left:0;}
+
+/* Preserve click targets and keep editing independent of the playhead. */
+#reviewTranscript button {touch-action:none;cursor:grab;}
+.word-span .word-body {cursor:grab;touch-action:none;}
+.word-span .word-body:active,#reviewTranscript button:active {cursor:grabbing;}
+#wordDraft {pointer-events:none;overflow:hidden;white-space:nowrap;font-size:11px;padding:4px 6px;box-sizing:border-box;}
+.audio-loop-tools {display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px;}
+.audio-loop-tools button {font-size:11px;min-height:30px;padding:5px 9px;}
+.audio-loop-tools button[aria-pressed=true] {background:var(--ink);color:#fff;border-color:var(--ink);}
+#loopRegion {position:absolute;top:0;bottom:0;background:#1717170a;border-inline:1px solid #777;pointer-events:none;}
+#loopRegion::before {content:'Loop';position:absolute;top:2px;left:3px;font-size:9px;color:#666;}
+.timing-retry {font-size:11px;padding-left:0;margin-top:0;}
+
+.connection-light.detected {background:#a87926;}

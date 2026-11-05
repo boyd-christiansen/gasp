@@ -37,7 +37,8 @@ if not store.sessions():
     samples=np.arange(16000*7)/16000
     for label,centers,phonetic in [('Synthetic syllables',[1.2,1.6,2,3,3.4,3.8,4.8,5.2,5.6],True),
                                  ('Synthetic incomplete syllables',[1.2,1.6],True),
-                                 ('Synthetic sentence',[1.2,1.6,2],False)]:
+                                 ('Synthetic sentence',[1.2,1.6,2],False),
+                                 ('Synthetic timeline sentence',[1.2,1.6,2],False)]:
         text='pa pa pa ta ta ta ka ka ka' if phonetic else 'Please open the window.'
         take=store.save_trial(session['id'],label,np.arange(141)*50_000_000,np.ones((141,64,12))*(100+20j),np.arange(141),
             extra=dict(articulation='voiced',accepted=False,synthetic=True,review_status='pending',

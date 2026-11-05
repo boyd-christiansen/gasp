@@ -21,6 +21,8 @@ The microphone preference survives restarts and updates independently of macOS p
 
 The optional global shortcut uses a double tap of Right Option (Right Control or Fn/Globe are alternatives) to begin and one tap to finish. Enable it in Settings and grant Input Monitoring if desired. Buttons and Space work without that permission. Modifier-plus-typing does not count as a tap.
 
+The radar indicator distinguishes **USB detected** (attached but not streaming), **Radar connected** (fresh frames), and **Radar · no data** (stale stream). After a successful USB connection, Gasp reconnects that saved port pair and profile on launch or reattachment. Explicit **Disconnect** disables this behavior until you connect again. Simulator and DCA sources are never started automatically.
+
 The recorder shows status and timing in the main window. The floating recording indicator appears only while Gasp is in the background or minimized, and disappears when you return.
 
 ## Reader: longer text and books
@@ -33,7 +35,7 @@ Open the named collection and choose **Resume session**, using the original sour
 
 ## Review: one player for radar, audio and text
 
-The playhead drives the radar visualization, audio waveform and word track together. Click a word to jump to it. Select a word and drag either edge, or use these shortcuts when focus is outside a text field:
+The playhead drives the radar visualization, audio waveform and word track together. Click a word to select it without moving the playhead; double-click to jump to its start. Drag a word block to move it, or drag either edge to trim. Editing remains available during playback. Use these shortcuts when focus is outside a text field:
 
 | Control | Action |
 |---|---|
@@ -44,9 +46,9 @@ The playhead drives the radar visualization, audio waveform and word track toget
 | Command-Z | Undo a word edit in the current review |
 | + / − | Zoom the timeline |
 
-**Use script** copies intended text only. Whole-passage verified text is valid supervision even without word timing. Select an untimed word and drag across its sound on the audio waveform, or set its boundaries with `[` / `]`. Draft intervals and an unfinished start marker are shown directly on the timeline.
+**Use script** copies intended text only. Whole-passage verified text is valid supervision even without word timing. Drag an untimed word from the transcript into **Audio** or **Words**, then trim its edges. Alternatively, select it and draw its interval in either track, or set boundaries with `[` / `]`. Whole-word moves preserve duration and cannot cross neighboring words. Arrow keys on a focused block or edge adjust by 50 ms; Shift-arrow adjusts by 10 ms. Draft intervals and an unfinished start marker are shown directly on the timeline. **Loop audio** repeats the selected word or a 0.25 / 0.5 / 1-second region around the playhead, word start, or word end. A boundary loop follows the edge as you trim; the shaded loop region marks what is repeated.
 
-Aloud review automatically suggests timing from local reference audio; **Auto-place words** reruns it. On-device speech recognition estimates are matched to the existing transcript, preserving its text and leaving unmatched words untimed. Syllable exercises use noise-relative sound regions and within-group valleys directly; they never require Siri or Dictation. Ambiguous or missing sounds stay unplaced. Ordinary sentence timing still uses optional Apple speech recognition. If that service is unavailable, **About automatic timing** explains the limitation and offers a retry; you can verify the whole transcript without word timestamps. These are estimates, not forced alignment, and remain pending until reviewed. Long recognition jobs use 45-second chunks with offsets retained in original audio time. Silent takes do not inherit aloud word boundaries.
+Aloud review automatically suggests timing from local reference audio; **Auto-place words** reruns it. On-device speech recognition estimates are matched to the existing transcript, preserving its text and leaving unmatched words untimed. Syllable exercises use noise-relative sound regions and within-group valleys directly; they never require Siri or Dictation. Ambiguous or missing sounds stay unplaced. Ordinary sentence timing still uses optional Apple speech recognition. If that service is unavailable, **About automatic timing** explains the limitation and **Retry automatic timing** is available directly below the transcript; you can verify the whole transcript without word timestamps. Retrying only fills unplaced words and preserves existing intervals. These are estimates, not forced alignment, and remain pending until reviewed. Long recognition jobs use 45-second chunks with offsets retained in original audio time. Silent takes do not inherit aloud word boundaries.
 
 For an external forced aligner, import JSON with `timebase: "audio"` or `"radar"` and a `words` array of `{ "text": "hello", "start": 1.2, "end": 1.6 }`. Montreal Forced Aligner's JSON `tiers.words.entries` format is also accepted. The aligner itself is not bundled. Imported word text must match existing reviewed text. Intervals must be ordered, non-overlapping and inside the radar take. Silent takes have intended/manual labels, not audio-established articulation boundaries.
 

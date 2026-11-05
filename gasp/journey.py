@@ -43,6 +43,7 @@ class Preferences(BaseModel):
     setup: Setup = Field(default_factory=Setup)
     connection: dict[str, str] = Field(default_factory=dict)
     reference_audio: bool = False
+    reconnect_radar: bool = False
 
 
 class Recipe(BaseModel):

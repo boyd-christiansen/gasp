@@ -1,7 +1,8 @@
 // Runs only in the isolated preview harness. Never mount this in the installed app.
 document.getElementById('audit').onclick=async()=>{
  const button=document.getElementById('audit'),out=document.getElementById('result');button.disabled=true;
- const w=document.getElementById('workspace').contentWindow,d=w.document,original=w.fetch.bind(w),passed=[];
+ const auditFrame=document.getElementById('workspace');auditFrame.src='/training?audit='+Date.now();await new Promise(r=>auditFrame.addEventListener('load',r,{once:true}));
+ const w=auditFrame.contentWindow,d=w.document,original=w.fetch.bind(w),passed=[];
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const wait=async(fn,message)=>{const end=Date.now()+20000;while(!fn()){if(Date.now()>end)throw Error(message);await sleep(25);}};
  const assert=(ok,message)=>{if(!ok)throw Error(message);passed.push(message);out.textContent=`Passed ${passed.length}: ${message}`;};
@@ -15,7 +16,7 @@ document.getElementById('audit').onclick=async()=>{
  const delay=(path,method='GET')=>{let seen=false;w.fetch=async(url,opts={})=>{const response=await original(url,opts);if(!seen&&String(url)===path&&(opts.method||'GET')===method){seen=true;await new Promise(r=>release=r);}return response;};return()=>seen;};
  try{
   await wait(()=>!!d.querySelector('#journeyHome [data-collection]'),'Workspace did not load');
-  await request('disconnect','POST');await wait(()=>d.getElementById('connectionText').textContent==='Radar disconnected','Fixture did not disconnect');
+  await request('disconnect','POST');await wait(()=>d.getElementById('connectionText').textContent.match(/^Radar (disconnected|USB detected)$/),'Fixture did not disconnect');
   const rect=()=>{const r=d.querySelector('.connection').getBoundingClientRect();return [r.x,r.y,r.width,r.height].join(',');},before=rect();
   click('#dictationWorkspace');await wait(()=>!d.getElementById('dictationPage').hidden,'Dictation did not open');
   assert(rect()===before,'Radar control stays anchored across workspaces');click('#radarWorkspace');
@@ -47,8 +48,8 @@ document.getElementById('audit').onclick=async()=>{
   await wait(()=>!!d.querySelector('#wordSpans [data-word="0"]'),'Word span was not placed');
   const edge=d.querySelector('#wordSpans [data-edge="end_s"]');edge.focus();edge.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await sleep(50);
   assert(d.activeElement===edge,'Keyboard boundary edits retain focus');
-  click('#stepForward');click('#wordSpans [data-word="0"]');
-  assert(Number(d.getElementById('timeline').getAttribute('aria-valuenow'))===0,'Timeline word buttons seek on activation');
+  click('#stepForward');const retainedTime=d.getElementById('timeline').getAttribute('aria-valuenow');click('#wordSpans [data-word="0"]');
+  assert(d.getElementById('timeline').getAttribute('aria-valuenow')===retainedTime,'Timeline word selection preserves the playhead');
   const gapTake=(await request('recordings')).find(t=>t.label==='Synthetic gap review');
   await openTake(gapTake);await wait(()=>!!d.querySelector('#qualitySummary [data-gap]'),'Gap review controls did not load');
   assert(d.getElementById('qualitySummary').textContent.includes('50 ms'),'Gap review explains the size of the missing data');
@@ -70,7 +71,7 @@ document.getElementById('audit').onclick=async()=>{
   w.fetch=(url,opts)=>String(url)==='/api/live'?Promise.reject(Error('Synthetic offline')):original(url,opts);
   await wait(()=>d.getElementById('connectionText').textContent==='Engine unavailable','Offline status stayed stale');
   assert(d.getElementById('connectionText').textContent==='Engine unavailable','Lost backend connectivity is not shown as a connected radar');w.fetch=original;
-  await wait(()=>d.getElementById('connectionText').textContent==='Radar disconnected','Status did not recover');
+  await wait(()=>d.getElementById('connectionText').textContent.match(/^Radar (disconnected|USB detected)$/),'Status did not recover');
   // Enter a real synthetic calibration, then check shortcuts from a different screen and a modal.
   click('#journeyHome [data-collection]');await wait(()=>!d.getElementById('collectionDetail').hidden,'Calibration did not open');if(d.getElementById('startFreshSession')){d.querySelector('#collectionDetail .collection-menu').open=true;click('#startFreshSession');}else click('#startCollection');await wait(()=>!d.getElementById('captureSetup').hidden,'Setup did not open');
   await request('connect','POST',{source:'simulator',profile:'usb-phase-20hz'});await wait(()=>!d.getElementById('setupNext').disabled,'Simulator did not become ready');
@@ -188,7 +189,7 @@ timingCheck.onclick=async()=>{
   assert(w.mockSpeechCalls===0&&d.querySelectorAll('#wordSpans .word-span').length===0,'Missing sounds are not fabricated or sent to ASR');
   assert(!d.getElementById('keepTake').disabled,'Uncertain timing does not block transcript review');
   const sentence=await open('Synthetic sentence');
-  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('Word timing is optional'),'No speech-service fallback');
+  await wait(()=>d.getElementById('reviewTimingHint').textContent.includes('Automatic sentence timing is unavailable'),'No speech-service fallback');
   assert(w.mockSpeechCalls===1,'Sentences can use the optional native recognizer');
   assert(!d.getElementById('timingAssistance').hidden&&d.getElementById('timingAssistanceDetail').textContent.includes('Siri and Dictation'),'Speech-service details are available without a recording-error banner');
   click('#keepTake');
@@ -199,4 +200,60 @@ timingCheck.onclick=async()=>{
   assert(w.mockSpeechCalls===1,'Reopening a verified take does not regenerate annotations');
   out.textContent=`Passed ${passed} timing checks · acoustic drafts, uncertain audio, unavailable ASR, and untimed transcript review`;
  }catch(e){out.textContent='FAILED timing: '+e.message;throw e;}finally{timingCheck.disabled=false;}
+};
+
+const timelineCheck=document.createElement('button');timelineCheck.textContent='Check timeline editing';document.querySelector('header').append(timelineCheck);
+timelineCheck.onclick=async()=>{
+ const out=document.getElementById('result'),frame=document.getElementById('workspace');timelineCheck.disabled=true;
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ const wait=async(fn,message)=>{const until=Date.now()+15000;while(!fn()){if(Date.now()>until)throw Error(message);await sleep(30);}};
+ let passed=0;const assert=(ok,message)=>{if(!ok)throw Error(message);out.textContent=`Passed ${++passed} timeline checks: ${message}`;};
+ try{
+  frame.src='/native-preview?timeline-check='+Date.now();await new Promise(r=>frame.addEventListener('load',r,{once:true}));
+  const w=frame.contentWindow,d=w.document,$=id=>d.getElementById(id),click=s=>d.querySelector(s).click();
+  await wait(()=>!!d.querySelector('#journeyHome [data-collection]'),'Workspace did not load');
+  const takes=await(await w.fetch('/api/recordings')).json(),take=takes.find(t=>t.label==='Synthetic timeline sentence');
+  if($('captureLayout').classList.contains('collapsed'))click('#toggleLibrary');d.querySelectorAll('#recordingList details').forEach(e=>e.open=true);click(`[data-tid="${take.id}"]`);
+  await wait(()=>!$('replayStage').hidden&&$('confirmedText').value==='Please open the window.','Sentence did not open');
+  await wait(()=>!$('suggestWords').disabled,'Timing did not finish');
+  const player=$('referencePlayer');await wait(()=>Number.isFinite(player.duration),'Audio did not load');
+  const time=()=>Number($('timeline').getAttribute('aria-valuenow'));
+  const rect=()=>$('timelineSheet').getBoundingClientRect(),duration=Number($('playTime').textContent.split('/')[1].replace('s',''));
+  const point=(t,lane='words')=>({clientX:rect().left+t/duration*rect().width,clientY:rect().top+(lane==='audio'?55:105)});
+  const event=(target,t,lane='words',container=$('timelineSheet'))=>({target,currentTarget:container,button:0,pointerId:1,...point(t,lane),preventDefault(){}});
+  // Synthetic pointer events cannot own a browser pointer. Stub only capture;
+  // exercise the production handlers, DOM hit targets, layout, storage and audio.
+  for(const el of [$('timelineSheet'),$('reviewTranscript')])el.setPointerCapture=()=>{};
+  const drag=(target,a,b,lane='words',cancel=false)=>{const el=$('timelineSheet');el.onpointerdown(event(target,a,lane));el.onpointermove(event(target,b,lane));(cancel?el.onpointercancel:el.onpointerup)(event(target,b,lane));};
+  const span=i=>d.querySelector(`[data-span="${i}"]`),start=i=>parseFloat(span(i).style.left)/100*duration,end=i=>start(i)+parseFloat(span(i).style.width)/100*duration;
+  // Clear only synthetic fixture timings for repeatable checks.
+  for(let i=0;i<4;i++){click(`[data-transcript="${i}"]`);click('#clearWordTime');}
+  $('timelineSheet').onpointerdown(event($('timeline'),4,'ruler'));
+  $('timelineSheet').onpointerup(event($('timeline'),4,'ruler'));
+  // Place the playhead via ruler coordinates, away from editable tracks.
+  const ruler={...event($('timeline'),4),clientY:rect().top+15};$('timelineSheet').onpointerdown(ruler);$('timelineSheet').onpointerup(ruler);
+  const anchor=time();click('[data-transcript="0"]');assert(time()===anchor,'Selecting a word preserves the listening position');
+  drag($('timeline'),1,1.5,'words');assert(Math.abs(start(0)-1)<.01&&Math.abs(end(0)-1.5)<.01,'Draw an interval directly in the Words track');assert(time()===anchor,'Drawing a word does not seek');
+  await sleep(1);const body=d.querySelector('[data-word="0"]');drag(body,1.2,1.5);assert(Math.abs(start(0)-1.3)<.01&&Math.abs(end(0)-1.8)<.01,'Drag a whole word without changing duration');assert(time()===anchor,'Moving a word preserves the playhead');
+  drag(d.querySelector('[data-edge="end_s"][data-index="0"]'),1.8,2);assert(Math.abs(end(0)-2)<.01&&time()===anchor,'Trimming preserves the playhead');
+  const old=start(0);drag(d.querySelector('[data-word="0"]'),1.4,1.7,'words',true);assert(Math.abs(start(0)-old)<.001,'Cancelling a drag restores the interval');
+  await sleep(1);const transcript=d.querySelector('[data-transcript="1"]'),tr=transcript.getBoundingClientRect(),container=$('reviewTranscript');
+  container.onpointerdown({...event(transcript,2.2,'words',container),clientX:tr.x+5,clientY:tr.y+5});container.onpointermove(event(transcript,2.2,'words',container));container.onpointerup(event(transcript,2.2,'words',container));
+  assert(Math.abs(start(1)-2.2)<.01&&end(1)>start(1),'Drag an unplaced transcript word into the timeline');assert(time()===anchor,'Dropping a word preserves the playhead');
+  drag(d.querySelector('[data-word="0"]'),1.4,6);assert(end(0)<=start(1)+.001,'Whole-word movement cannot cross the next word');
+  await sleep(1);click('[data-transcript="1"]');click('#playButton');await wait(()=>$('playButton').getAttribute('aria-label')==='Pause recording','Audio playback did not start');
+  const runningTime=time();drag(d.querySelector('[data-edge="end_s"][data-index="1"]'),end(1),end(1)+.1);
+  assert(!player.paused&&time()>=runningTime&&Math.abs(time()-runningTime)<.4,'Word trimming works during audio playback without seeking');click('#playButton');
+  $('loopTarget').value='end';$('loopTarget').dispatchEvent(new w.Event('change'));click('#loopAudio');await wait(()=>$('loopAudio').getAttribute('aria-pressed')==='true'&&!player.paused,'Loop did not start');
+  await sleep(1200);assert(time()>=end(1)-.26&&time()<=end(1)+.3,'Half-second boundary loop repeats inside its window');
+  drag(d.querySelector('[data-edge="end_s"][data-index="1"]'),end(1),end(1)+.2);await sleep(650);
+  assert(time()>=end(1)-.26&&time()<=end(1)+.3&&!player.paused,`Boundary loop follows a trim without stopping (time=${time()}, edge=${end(1)}, paused=${player.paused}, region=${$('loopRegion').title})`);click('#loopAudio');click('#playButton');
+  await sleep(1);const before=start(1);d.querySelector('[data-word="1"]').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',shiftKey:true,bubbles:true}));assert(Math.abs(start(1)-before-.01)<.002,'Shift-arrow nudges the whole word by 10 milliseconds');
+  const preserve=start(1);click('#retryTiming');await wait(()=>!$('retryTiming').disabled,'Retry did not finish');assert(Math.abs(start(1)-preserve)<.001,'Unavailable recognition leaves manual edits intact');
+  click('#saveAnnotations');await wait(()=>$('reviewState').textContent==='Draft saved','Draft did not save');
+  const saved=await(await w.fetch(`/api/sessions/${take.session_id}/trials/${take.id}`)).json();assert(saved.words[0].source==='manual'&&saved.words[1].start_s>saved.words[0].end_s,'Edited intervals persist as manual, ordered annotations');
+  const button=$('keepTake');for(const width of [900,700,560]){frame.width=width;await sleep(80);const range=d.createRange();range.selectNodeContents(button);const b=button.getBoundingClientRect(),text=range.getBoundingClientRect();assert(text.left>=b.left&&text.right<=b.right&&button.scrollWidth<=button.clientWidth+1,`Keep button text fits at ${width}px`);}
+  frame.width=1280;frame.height=800;
+  out.textContent=`Passed ${passed} timeline checks · selection, drawing, moving, trimming, cancellation, playback, loops, saving, and button layout`;
+ }catch(e){out.textContent='FAILED timeline: '+e.message;throw e;}finally{timelineCheck.disabled=false;}
 };
